@@ -914,52 +914,6 @@ Future<void> _downloadFirmwareToPhone() async {
 //     _connect(); 
 //   }
 // }
-// Future<void> _uploadLocalBinToESP32() async {
-//   // 1. Tìm đường dẫn file .bin từ bộ nhớ tạm hoặc quét thư mục
-//   String? binPath = FirmwareService.localDownloadedBinPath;
-
-//   if (binPath == null || !await File(binPath).exists()) {
-//     final latestFile = await FirmwareService.getLatestDownloadedBinFile();
-//     if (latestFile != null) {
-//       binPath = latestFile.path;
-//       FirmwareService.localDownloadedBinPath = binPath;
-//     }
-//   }
-
-//   // 🟢 Điểm kiểm tra an toàn 1 (Trước khi dùng context để hiển thị SnackBar)
-//   if (!mounted) return;
-
-//   // 2. Nếu không tìm thấy file nào thì báo lỗi
-//   if (binPath == null || !await File(binPath).exists()) {
-//     _showErrorSnackBar('Không tìm thấy file Firmware (.bin) nào! Vui lòng tải Firmware trước.');
-//     return;
-//   }
-
-//   setState(() {
-//     _isOTAUploading = true;
-//   });
-
-//   // 🟢 Điểm kiểm tra an toàn 2 (Trước khi mở màn hình WebOTAScreen)
-//   if (!mounted) return;
-
-//   await Navigator.push(
-//     context,
-//     MaterialPageRoute(
-//       builder: (context) => WebOTAScreen(
-//         ip: widget.ip,
-//         binFilePath: binPath,
-//       ),
-//     ),
-//   );
-
-//   // 🟢 Điểm kiểm tra an toàn 3 (Sau khi từ WebOTAScreen quay trở lại)
-//   if (!mounted) return;
-
-//   setState(() {
-//     _isOTAUploading = false;
-//   });
-//   _connect();
-// }
 Future<void> _uploadLocalBinToESP32() async {
   // 1. Tìm đường dẫn file .bin từ bộ nhớ tạm hoặc quét thư mục
   String? binPath = FirmwareService.localDownloadedBinPath;
@@ -981,9 +935,6 @@ Future<void> _uploadLocalBinToESP32() async {
     return;
   }
 
-  // 🔴 BƯỚC MỚI: Ngắt kết nối socket/websocket cũ để tránh bị treo connection khi ESP32 reboot
-  _disconnect(); 
-
   setState(() {
     _isOTAUploading = true;
   });
@@ -991,8 +942,7 @@ Future<void> _uploadLocalBinToESP32() async {
   // 🟢 Điểm kiểm tra an toàn 2 (Trước khi mở màn hình WebOTAScreen)
   if (!mounted) return;
 
-  // 🔴 BƯỚC MỚI: Hứng kết quả isSuccess từ WebOTAScreen (trả về true khi nạp thành công)
-  final isSuccess = await Navigator.push<bool>(
+  await Navigator.push(
     context,
     MaterialPageRoute(
       builder: (context) => WebOTAScreen(
@@ -1008,199 +958,33 @@ Future<void> _uploadLocalBinToESP32() async {
   setState(() {
     _isOTAUploading = false;
   });
-
-  // 🔴 BƯỚC MỚI: Xử lý tự động kết nối lại sạch
-  if (isSuccess == true) {
-    // Thông báo cho người dùng biết sa bàn đang khởi động lại
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Row(
-          children: [
-            SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-            ),
-            SizedBox(width: 12),
-            Text('Sa bàn đang khởi động lại... Tự động kết nối sau 4 giây.'),
-          ],
-        ),
-        duration: Duration(seconds: 4),
-        backgroundColor: Colors.orange,
-      ),
-    );
-
-    // Chờ 4 giây cho ESP32 khởi động xong Wi-Fi và Server
-    await Future.delayed(const Duration(seconds: 4));
-
-    if (!mounted) return;
-
-    // Khởi tạo phiên kết nối mới hoàn toàn
-    _connect();
-  } else {
-    // Trường hợp người dùng bấm back hoặc hủy giữa chừng -> Thử kết nối lại ngay
-    _connect();
-  }
+  _connect();
 }
-// void _connect() {
-//   final ip = widget.ip.isNotEmpty ? widget.ip : _ipController.text.trim();
-//   if (ip.isEmpty) {
-//     debugPrint('[WS] IP không hợp lệ, không thể khởi tạo kết nối WebSocket.');
-//     return;
-//   }
-//   try {
-//     _channel?.sink.close();
-//     final wsUrl = Uri.parse('ws://$ip:81'); // Cổng WebSocket mặc định của ESP32 (thường là 81)
-//     debugPrint('[WS] Đang kết nối lại WebSocket tại: $wsUrl');
-//     _channel = IOWebSocketChannel.connect(
-//       wsUrl,
-//       pingInterval: const Duration(seconds: 5), // Gửi Ping giữ kết nối
-//     );
-//     if (mounted) {
-//       setState(() {
-//         isConnected = false; // Tạm thời đặt false trong lúc chờ dữ liệu gửi về
-//       });
-//     }
-//     _channel!.stream.listen(
-//       (data) {
-//         debugPrint('[WS] Nhận dữ liệu từ ESP32: $data');
-//         if (mounted) {
-//           setState(() {
-//             isConnected = true; // Kết nối thành công khi bắt đầu nhận dữ liệu
-//           });
-//         }
-//       },
-//       onError: (error) {
-//         debugPrint('[WS] Lỗi kết nối WebSocket: $error');
-//         if (mounted) {
-//           setState(() {
-//             isConnected = false;
-//           });
-//           _handleDisconnection();
-//         }
-//       },
-//       onDone: () {
-//         debugPrint('[WS] Kết nối WebSocket đã đóng (onDone).');
-//         if (mounted) {
-//           setState(() {
-//             isConnected = false;
-//           });
-//           _handleDisconnection();
-//         }
-//       },
-//       cancelOnError: true,
-//     );
-//   } catch (e) {
-//     debugPrint('[WS] Ngoại lệ khi khởi tạo kết nối WebSocket: $e');
-//     if (mounted) {
-//       setState(() {
-//         isConnected = false;
-//       });
-//       _handleDisconnection();
-//     }
-//   }
-// }
-// void _handleDisconnection() {
-//   debugPrint('[WS] Kết nối ngắt. Cờ _isOTAUploading = $_isOTAUploading');
-//   if (_isOTAUploading) {
-//     debugPrint('[OTA] Đang nạp Firmware, giữ nguyên giao diện WebView.');
-//   } else {
-//     _resetToConnectScreen();
-//   }
-// }
-// Future<void> openWebOTAInChrome(String esp32Ip) async {
-//   final Uri url = Uri.parse('http://$esp32Ip/update');
-//   try {
-//     if (mounted) {
-//       setState(() {
-//         _isOTAUploading = true;
-//       });
-//       debugPrint('[OTA] Đã bật cờ _isOTAUploading = true (Trình duyệt ngoài)');
-//     }
-//     bool launched = await launchUrl(
-//       url,
-//       mode: LaunchMode.externalApplication,
-//     );
-//     if (launched) {
-//       Future.delayed(const Duration(seconds: 30), () {
-//         if (mounted && _isOTAUploading) {
-//           setState(() {
-//             _isOTAUploading = false;
-//           });
-//           debugPrint('[OTA] Tự động reset cờ _isOTAUploading sau 30s timeout');
-//         }
-//       });
-//     } else {
-//       debugPrint('[OTA] Không thể mở trình duyệt Chrome.');
-//       if (mounted) {
-//         setState(() {
-//           _isOTAUploading = false; // Reset cờ nếu mở thất bại
-//         });
-//       }
-//     }
-//   } catch (e) {
-//     debugPrint('[OTA] Lỗi mở Chrome: $e');
-//     if (mounted) {
-//       setState(() {
-//         _isOTAUploading = false; // Reset cờ nếu gặp lỗi
-//       });
-//     }
-//   }
-// }
-// 🟢 1. BỔ SUNG HÀM NGẮT KẾT NỐI SẠCH (Hủy hoàn toàn Channel & Stream)
-void _disconnect() {
-  try {
-    _channel?.sink.close();
-    _channel = null;
-    if (mounted) {
-      setState(() {
-        isConnected = false;
-      });
-    }
-    debugPrint('[WS] Đã ngắt kết nối WebSocket cũ sạch sẽ.');
-  } catch (e) {
-    debugPrint('[WS] Lỗi khi đóng ngắt kết nối: $e');
-  }
-}
-
-// 🟢 2. CẬP NHẬT HÀM KẾT NỐI WEBSOCKET
 void _connect() {
   final ip = widget.ip.isNotEmpty ? widget.ip : _ipController.text.trim();
   if (ip.isEmpty) {
     debugPrint('[WS] IP không hợp lệ, không thể khởi tạo kết nối WebSocket.');
     return;
   }
-
   try {
-    // Đảm bảo ngắt sạch phiên kết nối cũ trước khi mở kết nối mới
-    _disconnect();
-
-    final wsUrl = Uri.parse('ws://$ip:81'); // Cổng WebSocket mặc định ESP32
+    _channel?.sink.close();
+    final wsUrl = Uri.parse('ws://$ip:81'); // Cổng WebSocket mặc định của ESP32 (thường là 81)
     debugPrint('[WS] Đang kết nối lại WebSocket tại: $wsUrl');
-
     _channel = IOWebSocketChannel.connect(
       wsUrl,
       pingInterval: const Duration(seconds: 5), // Gửi Ping giữ kết nối
     );
-
-    // 🚀 BẬTisConnected = true NGAY KHI CHANNEL ĐƯỢC MỞ THÀNH CÔNG
     if (mounted) {
       setState(() {
-        isConnected = true; 
+        isConnected = false; // Tạm thời đặt false trong lúc chờ dữ liệu gửi về
       });
     }
-
-    // 🚀 Gửi ngay 1 câu lệnh Handshake/Ping mở màn cho ESP32 biết App đã sẵn sàng
-    try {
-      _channel?.sink.add('PING'); // Hoặc lệnh 'STATUS'/'CONNECT' tùy Firmware ESP32
-    } catch (_) {}
-
     _channel!.stream.listen(
       (data) {
         debugPrint('[WS] Nhận dữ liệu từ ESP32: $data');
         if (mounted) {
           setState(() {
-            isConnected = true;
+            isConnected = true; // Kết nối thành công khi bắt đầu nhận dữ liệu
           });
         }
       },
@@ -1234,8 +1018,6 @@ void _connect() {
     }
   }
 }
-
-// 🟢 3. HÀM XỬ LÝ KHI MẤT KẾT NỐI (GIỮ NGUYÊN LOGIC CỦA BẠN)
 void _handleDisconnection() {
   debugPrint('[WS] Kết nối ngắt. Cờ _isOTAUploading = $_isOTAUploading');
   if (_isOTAUploading) {
@@ -1244,8 +1026,6 @@ void _handleDisconnection() {
     _resetToConnectScreen();
   }
 }
-
-// 🟢 4. HÀM MỞ BẰNG CHROME NGOÀI (BỔ SUNG MOUNTED GUARD TRÁNH CẢNH BÁO LINT)
 Future<void> openWebOTAInChrome(String esp32Ip) async {
   final Uri url = Uri.parse('http://$esp32Ip/update');
   try {
@@ -1255,12 +1035,10 @@ Future<void> openWebOTAInChrome(String esp32Ip) async {
       });
       debugPrint('[OTA] Đã bật cờ _isOTAUploading = true (Trình duyệt ngoài)');
     }
-
     bool launched = await launchUrl(
       url,
       mode: LaunchMode.externalApplication,
     );
-
     if (launched) {
       Future.delayed(const Duration(seconds: 30), () {
         if (mounted && _isOTAUploading) {
@@ -1274,7 +1052,7 @@ Future<void> openWebOTAInChrome(String esp32Ip) async {
       debugPrint('[OTA] Không thể mở trình duyệt Chrome.');
       if (mounted) {
         setState(() {
-          _isOTAUploading = false;
+          _isOTAUploading = false; // Reset cờ nếu mở thất bại
         });
       }
     }
@@ -1282,7 +1060,7 @@ Future<void> openWebOTAInChrome(String esp32Ip) async {
     debugPrint('[OTA] Lỗi mở Chrome: $e');
     if (mounted) {
       setState(() {
-        _isOTAUploading = false;
+        _isOTAUploading = false; // Reset cờ nếu gặp lỗi
       });
     }
   }
