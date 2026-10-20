@@ -1891,13 +1891,18 @@ class ConnectScreen extends StatefulWidget {
 }
 
 class _ConnectScreenState extends State<ConnectScreen> {
+  // 🟢 KHAI BÁO BIẾN Ở ĐÂY (Mặc định là 'vi' - Tiếng Việt)
+  String _selectedLang = 'vi';
   final TextEditingController _ipController =
       TextEditingController(text: '192.168.0.27');
   bool _isLoading = false;
 
   // 🟢 State lưu Tiêu đề và Ảnh Banner màn hình Connect
-  String _appTitle = 'ĐIỀU KHIỂN SA BÀN THÔNG MINH';
-  String _bgImagePath = 'assets/images/background.png';
+  // String _appTitle = 'ĐIỀU KHIỂN SA BÀN THÔNG MINH';
+  // String _bgImagePath = 'assets/images/background.png';
+  // 🟢 Getter tự động trả về tiêu đề theo ngôn ngữ đang chọn
+String _appTitle = 'ĐIỀU KHIỂN SA BÀN THÔNG MINH';
+String _bgImagePath = 'assets/images/background.png';
 
   // 🟢 State lưu đường dẫn file bin đã tải về điện thoại
   String? localDownloadedBinPath;
@@ -1910,8 +1915,20 @@ class _ConnectScreenState extends State<ConnectScreen> {
       _ipController.text = widget.autoConnectIp!;
     }
     _loadSavedPreferences();
+    _loadSavedLanguage();
   }
-
+Future<void> _loadSavedLanguage() async {
+  final prefs = await SharedPreferences.getInstance();
+  final savedLang = prefs.getString('app_language') ?? 'vi';
+  if (mounted) {
+    setState(() {
+      _selectedLang = savedLang;
+      _appTitle = _selectedLang == 'vi'
+          ? 'ĐIỀU KHIỂN SA BÀN THÔNG MINH'
+          : 'SMART SCALE MODEL CONTROLLER';
+    });
+  }
+}
   // 🟢 Đọc Tên App & Ảnh Banner đã lưu từ bộ nhớ máy
   Future<void> _loadSavedPreferences() async {
     try {
@@ -2200,10 +2217,18 @@ Future<void> _downloadFirmwareToPhone() async {
   // 🟢 2. HÀM CHUYỂN SANG MÀN HÌNH WEB OTA NẠP FILE BIN
   Future<void> _uploadLocalBinToESP32() async {
   final ip = _ipController.text.trim();
+  // if (!_isValidServerAddress(ip)) {
+  //   _showErrorSnackBar('Vui lòng nhập địa chỉ IP/Server hợp lệ!');
+  //   return;
+  // }
   if (!_isValidServerAddress(ip)) {
-    _showErrorSnackBar('Vui lòng nhập địa chỉ IP/Server hợp lệ!');
-    return;
-  }
+  _showErrorSnackBar(
+    _selectedLang == 'vi'
+        ? 'Vui lòng nhập địa chỉ IP/Server hợp lệ!'
+        : 'Please enter a valid IP address or Server URL!',
+  );
+  return;
+}
 
   setState(() {
     _isOTAUploading = true;
@@ -2315,6 +2340,7 @@ Future<void> _downloadFirmwareToPhone() async {
         context,
         MaterialPageRoute(
           builder: (context) => MasterControlScreen(
+            currentLang: _selectedLang, // 👈 Truyền giá trị ngôn ngữ sang màn hình điều khiển
             channel: channel,
             ip: ip,
             configData: configData,
@@ -2447,12 +2473,18 @@ Future<void> _downloadFirmwareToPhone() async {
                         await prefs.remove('saved_connect_title');
                         await prefs.remove('saved_connect_bg');
 
+                        // if (mounted) {
+                        //   setState(() {
+                        //     _appTitle = 'ĐIỀU KHIỂN SA BÀN THÔNG MINH';
+                        //     _bgImagePath = 'assets/images/background.png';
+                        //   });
+                        // }
                         if (mounted) {
-                          setState(() {
-                            _appTitle = 'ĐIỀU KHIỂN SA BÀN THÔNG MINH';
-                            _bgImagePath = 'assets/images/background.png';
-                          });
-                        }
+  setState(() {
+    // 🟢 Không gán _appTitle ở đây nữa để Getter tự động làm việc theo _selectedLang
+    _bgImagePath = 'assets/images/background.png';
+  });
+}
 
                         _loadRemoteConfigFast();
 
@@ -2640,11 +2672,17 @@ Future<void> _downloadFirmwareToPhone() async {
                             color: Color(0xFF0F172A),
                           ),
                           decoration: InputDecoration(
-                            labelText: 'Địa chỉ IP / Server Sa bàn',
+                            // labelText: 'Địa chỉ IP / Server Sa bàn',
+                            labelText: _selectedLang == 'vi'
+    ? 'Địa chỉ IP / Server Sa bàn'
+    : 'IP Address / Model Server',
                             labelStyle: const TextStyle(
                                 color: Color(0xFF0369A1), fontSize: 13),
-                            hintText:
-                                'VD: 192.168.0.27 hoặc saban-demo.onrender.com',
+                            // hintText:
+                            //     'VD: 192.168.0.27 hoặc saban-demo.onrender.com',
+                            hintText: _selectedLang == 'vi'
+        ? 'Ví dụ: 192.168.0.27 hoặc saban-demo.onrender.com'
+        : 'e.g., 192.168.0.27 or saban-demo.onrender.com',
                             prefixIcon: const Icon(Icons.wifi_rounded,
                                 color: Color(0xFF0284C7), size: 20),
                             contentPadding: const EdgeInsets.symmetric(
@@ -2664,87 +2702,166 @@ Future<void> _downloadFirmwareToPhone() async {
                           ),
                         ),
                         const SizedBox(height: 14),
+                        // SizedBox(
+                        //   width: double.infinity,
+                        //   height: 48,
+                        //   child: InkWell(
+                        //     onTap: _isLoading ? null : _connect,
+                        //     borderRadius: BorderRadius.circular(12),
+                        //     child: AnimatedContainer(
+                        //       duration: const Duration(milliseconds: 200),
+                        //       decoration: BoxDecoration(
+                        //         gradient: _isLoading
+                        //             ? const LinearGradient(colors: [
+                        //                 Color(0xFF94A3B8),
+                        //                 Color(0xFF64748B)
+                        //               ])
+                        //             : const LinearGradient(
+                        //                 colors: [
+                        //                   Color(0xFF0284C7),
+                        //                   Color(0xFF0369A1)
+                        //                 ],
+                        //                 begin: Alignment.topLeft,
+                        //                 end: Alignment.bottomRight,
+                        //               ),
+                        //         borderRadius: BorderRadius.circular(12),
+                        //         boxShadow: [
+                        //           BoxShadow(
+                        //             color: const Color(0xFF0284C7)
+                        //                 .withValues(alpha: 0.3),
+                        //             blurRadius: 12,
+                        //             offset: const Offset(0, 4),
+                        //           ),
+                        //         ],
+                        //       ),
+                        //       child: Center(
+                        //         child: _isLoading
+                        //             ? const Row(
+                        //                 mainAxisAlignment:
+                        //                     MainAxisAlignment.center,
+                        //                 children: [
+                        //                   SizedBox(
+                        //                     width: 18,
+                        //                     height: 18,
+                        //                     child: CircularProgressIndicator(
+                        //                       color: Colors.white,
+                        //                       strokeWidth: 2,
+                        //                     ),
+                        //                   ),
+                        //                   SizedBox(width: 10),
+                        //                   Text(
+                        //                     'Đang kết nối, vui lòng chờ chút ạ!',
+                        //                     style: TextStyle(
+                        //                       color: Colors.white,
+                        //                       fontWeight: FontWeight.bold,
+                        //                       fontSize: 14,
+                        //                     ),
+                        //                   ),
+                        //                 ],
+                        //               )
+                        //             : const Row(
+                        //                 mainAxisAlignment:
+                        //                     MainAxisAlignment.center,
+                        //                 children: [
+                        //                   Icon(
+                        //                       Icons.power_settings_new_rounded,
+                        //                       color: Colors.white,
+                        //                       size: 18),
+                        //                   SizedBox(width: 8),
+                        //                   Text(
+                        //                     'KẾT NỐI VÀ TẢI SA BÀN',
+                        //                     style: TextStyle(
+                        //                       color: Colors.white,
+                        //                       fontSize: 14,
+                        //                       fontWeight: FontWeight.bold,
+                        //                       letterSpacing: 0.8,
+                        //                     ),
+                        //                   ),
+                        //                 ],
+                        //               ),
+                        //       ),
+                        //     ),
+                        //   ),
+                        // ),
                         SizedBox(
-                          width: double.infinity,
-                          height: 48,
-                          child: InkWell(
-                            onTap: _isLoading ? null : _connect,
-                            borderRadius: BorderRadius.circular(12),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
-                              decoration: BoxDecoration(
-                                gradient: _isLoading
-                                    ? const LinearGradient(colors: [
-                                        Color(0xFF94A3B8),
-                                        Color(0xFF64748B)
-                                      ])
-                                    : const LinearGradient(
-                                        colors: [
-                                          Color(0xFF0284C7),
-                                          Color(0xFF0369A1)
-                                        ],
-                                        begin: Alignment.topLeft,
-                                        end: Alignment.bottomRight,
-                                      ),
-                                borderRadius: BorderRadius.circular(12),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: const Color(0xFF0284C7)
-                                        .withValues(alpha: 0.3),
-                                    blurRadius: 12,
-                                    offset: const Offset(0, 4),
-                                  ),
-                                ],
-                              ),
-                              child: Center(
-                                child: _isLoading
-                                    ? const Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: [
-                                          SizedBox(
-                                            width: 18,
-                                            height: 18,
-                                            child: CircularProgressIndicator(
-                                              color: Colors.white,
-                                              strokeWidth: 2,
-                                            ),
-                                          ),
-                                          SizedBox(width: 10),
-                                          Text(
-                                            'Đang kết nối, vui lòng chờ chút ạ!',
-                                            style: TextStyle(
-                                              color: Colors.white,
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 14,
-                                            ),
-                                          ),
-                                        ],
-                                      )
-                                    : const Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: [
-                                          Icon(
-                                              Icons.power_settings_new_rounded,
-                                              color: Colors.white,
-                                              size: 18),
-                                          SizedBox(width: 8),
-                                          Text(
-                                            'KẾT NỐI VÀ TẢI SA BÀN',
-                                            style: TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.bold,
-                                              letterSpacing: 0.8,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                              ),
-                            ),
-                          ),
-                        ),
+  width: double.infinity,
+  height: 48,
+  child: InkWell(
+    onTap: _isLoading ? null : _connect,
+    borderRadius: BorderRadius.circular(12),
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      decoration: BoxDecoration(
+        gradient: _isLoading
+            ? const LinearGradient(
+                colors: [Color(0xFF94A3B8), Color(0xFF64748B)],
+              )
+            : const LinearGradient(
+                colors: [Color(0xFF0284C7), Color(0xFF0369A1)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0284C7).withValues(alpha: 0.3),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Center(
+        child: _isLoading
+            ? Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    _selectedLang == 'vi'
+                        ? 'Đang kết nối, vui lòng chờ chút ạ!'
+                        : 'Connecting, please wait...',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              )
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.power_settings_new_rounded,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    _selectedLang == 'vi'
+                        ? 'KẾT NỐI VÀ TẢI SA BÀN'
+                        : 'CONNECT & LOAD SCALE MODEL',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    ),
+  ),
+),
                       ],
                     ),
                   ),
@@ -2919,6 +3036,272 @@ Future<void> _downloadFirmwareToPhone() async {
 //       ),
 //     );
 //   }
+// Widget _buildTopBar(BuildContext context) {
+//   return Padding(
+//     padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+//     child: Row(
+//       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+//       children: [
+//         // 1. Nút Menu bên trái
+//         Container(
+//           decoration: BoxDecoration(
+//             shape: BoxShape.circle,
+//             color: Colors.white.withValues(alpha: 0.9),
+//             boxShadow: [
+//               BoxShadow(
+//                 color: const Color(0xFF0284C7).withValues(alpha: 0.12),
+//                 blurRadius: 10,
+//                 offset: const Offset(0, 3),
+//               ),
+//             ],
+//           ),
+//           child: PopupMenuButton<String>(
+//             constraints: const BoxConstraints(minWidth: 280, maxWidth: 320),
+//             icon: const Icon(Icons.menu_rounded,
+//                 color: Color(0xFF0369A1), size: 22),
+//             shape: RoundedRectangleBorder(
+//                 borderRadius: BorderRadius.circular(16)),
+//             onSelected: (value) {
+//               if (value == 'demo_mode') {
+//                 setState(() {
+//                   _ipController.text = 'saban-demo.onrender.com';
+//                 });
+//                 _connect();
+//               } else if (value == 'real_mode') {
+//                 setState(() {
+//                   _ipController.text = '192.168.0.27';
+//                 });
+//                 _connect();
+//               } else if (value == 'web_demo') {
+//                 _openWebDashboard();
+//               } else if (value == 'edit_image') {
+//                 _showImageEditDialog(context);
+//               } else if (value == 'download_firmware') {
+//                 _downloadFirmwareToPhone();
+//               } else if (value == 'upload_ota') {
+//                 _uploadLocalBinToESP32();
+//               } else if (value == 'open_chrome_ota') {
+//                 openWebOTAInChrome(_ipController.text.trim());
+//               }
+//             },
+//             itemBuilder: (BuildContext context) => [
+//               const PopupMenuItem(
+//                 value: 'demo_mode',
+//                 child: Row(
+//                   children: [
+//                     Icon(Icons.cloud_done_rounded,
+//                         color: Color(0xFF0284C7), size: 20),
+//                     SizedBox(width: 10),
+//                     Expanded(
+//                       child: Text('Dùng Sa Bàn Demo Cloud',
+//                           style: TextStyle(fontWeight: FontWeight.bold),
+//                           overflow: TextOverflow.ellipsis),
+//                     ),
+//                   ],
+//                 ),
+//               ),
+//               const PopupMenuItem(
+//                 value: 'real_mode',
+//                 child: Row(
+//                   children: [
+//                     Icon(Icons.lan_rounded, color: Colors.green, size: 20),
+//                     SizedBox(width: 10),
+//                     Expanded(
+//                       child: Text('Dùng Sa Bàn Thực (Mạng LAN)',
+//                           overflow: TextOverflow.ellipsis),
+//                     ),
+//                   ],
+//                 ),
+//               ),
+//               const PopupMenuDivider(),
+//               const PopupMenuItem(
+//                 value: 'web_demo',
+//                 child: Row(
+//                   children: [
+//                     Icon(Icons.open_in_browser_rounded,
+//                         color: Color(0xFF0284C7), size: 20),
+//                     SizedBox(width: 10),
+//                     Expanded(
+//                       child: Text('Mở Dashboard Web Demo',
+//                           overflow: TextOverflow.ellipsis),
+//                     ),
+//                   ],
+//                 ),
+//               ),
+//               const PopupMenuItem(
+//                 value: 'edit_image',
+//                 child: Row(
+//                   children: [
+//                     Icon(Icons.edit_note_rounded,
+//                         color: Color(0xFF0369A1), size: 20),
+//                     SizedBox(width: 10),
+//                     Expanded(
+//                       child: Text('Chỉnh Sửa Tiêu Đề / Ảnh Banner',
+//                           overflow: TextOverflow.ellipsis),
+//                     ),
+//                   ],
+//                 ),
+//               ),
+//               const PopupMenuDivider(),
+//               const PopupMenuItem(
+//                 value: 'download_firmware',
+//                 child: Row(
+//                   children: [
+//                     Icon(Icons.download_for_offline_rounded,
+//                         color: Color(0xFF0284C7), size: 20),
+//                     SizedBox(width: 10),
+//                     Expanded(
+//                       child: Text('1. Tải Firmware .bin về điện thoại',
+//                           overflow: TextOverflow.ellipsis),
+//                     ),
+//                   ],
+//                 ),
+//               ),
+//               const PopupMenuItem(
+//                 value: 'upload_ota',
+//                 child: Row(
+//                   children: [
+//                     Icon(Icons.system_update_rounded,
+//                         color: Colors.orange, size: 20),
+//                     SizedBox(width: 10),
+//                     Expanded(
+//                       child: Text('2. Nạp file .bin vào ESP32 (Web OTA)',
+//                           overflow: TextOverflow.ellipsis),
+//                     ),
+//                   ],
+//                 ),
+//               ),
+//               const PopupMenuItem(
+//                 value: 'open_chrome_ota',
+//                 child: Row(
+//                   children: [
+//                     Icon(Icons.chrome_reader_mode_rounded,
+//                         color: Colors.green, size: 20),
+//                     SizedBox(width: 10),
+//                     Expanded(
+//                       child: Text('Mở Trang Nạp OTA Trên Trình Duyệt',
+//                           overflow: TextOverflow.ellipsis),
+//                     ),
+//                   ],
+//                 ),
+//               ),
+//             ],
+//           ),
+//         ),
+
+//         // 🟢 2. Nút Icon Information bên phải
+//         // Container(
+//         //   decoration: BoxDecoration(
+//         //     shape: BoxShape.circle,
+//         //     color: Colors.white.withValues(alpha: 0.9),
+//         //     boxShadow: [
+//         //       BoxShadow(
+//         //         color: const Color(0xFF0284C7).withValues(alpha: 0.12),
+//         //         blurRadius: 10,
+//         //         offset: const Offset(0, 3),
+//         //       ),
+//         //     ],
+//         //   ),
+//         //   child: IconButton(
+//         //     icon: const Icon(Icons.info_outline_rounded,
+//         //         color: Color(0xFF0369A1), size: 22),
+//         //     onPressed: () {
+//         //       showAboutDialog(
+//         //         context: context,
+//         //         applicationName: _appTitle,
+//         //         applicationVersion: 'v1.0.2',
+//         //         applicationIcon: const Icon(Icons.domain_rounded,
+//         //             color: Color(0xFF0284C7), size: 36),
+//         //         children: const [
+//         //           Text(
+//         //               'Ứng dụng điều khiển sa bàn thông minh kết nối qua mạng LAN/Cloud.'),
+//         //         ],
+//         //       );
+//         //     },
+//         //   ),
+//         // ),
+//         Row(
+//   mainAxisSize: MainAxisSize.min,
+//   children: [
+//     // 🟢 1. Nút chuyển đổi Ngôn Ngữ VN / EN
+//     GestureDetector(
+//       onTap: () {
+//         setState(() {
+//           _selectedLang = (_selectedLang == 'vi') ? 'en' : 'vi';
+//         });
+//       },
+//       child: Container(
+//         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+//         decoration: BoxDecoration(
+//           color: Colors.white.withValues(alpha: 0.9),
+//           borderRadius: BorderRadius.circular(20),
+//           boxShadow: [
+//             BoxShadow(
+//               color: const Color(0xFF0284C7).withValues(alpha: 0.12),
+//               blurRadius: 10,
+//               offset: const Offset(0, 3),
+//             ),
+//           ],
+//         ),
+//         child: Row(
+//           mainAxisSize: MainAxisSize.min,
+//           children: [
+//             Text(
+//               _selectedLang == 'vi' ? '🇻🇳 VN' : '🇬🇧 EN',
+//               style: const TextStyle(
+//                 fontWeight: FontWeight.bold,
+//                 fontSize: 13,
+//                 color: Color(0xFF0369A1),
+//               ),
+//             ),
+//             const SizedBox(width: 4),
+//             const Icon(Icons.swap_horiz_rounded, size: 16, color: Color(0xFF0369A1)),
+//           ],
+//         ),
+//       ),
+//     ),
+
+//     const SizedBox(width: 8), // Khoảng cách giữa 2 nút
+
+//     // 🟢 2. Nút Thông tin (Gốc của bạn)
+//     Container(
+//       decoration: BoxDecoration(
+//         shape: BoxShape.circle,
+//         color: Colors.white.withValues(alpha: 0.9),
+//         boxShadow: [
+//           BoxShadow(
+//             color: const Color(0xFF0284C7).withValues(alpha: 0.12),
+//             blurRadius: 10,
+//             offset: const Offset(0, 3),
+//           ),
+//         ],
+//       ),
+//       child: IconButton(
+//         icon: const Icon(Icons.info_outline_rounded,
+//             color: Color(0xFF0369A1), size: 22),
+//         onPressed: () {
+//           showAboutDialog(
+//             context: context,
+//             applicationName: _appTitle,
+//             applicationVersion: 'v1.0.2',
+//             applicationIcon: const Icon(Icons.domain_rounded,
+//                 color: Color(0xFF0284C7), size: 36),
+//             children: [
+//               Text(_selectedLang == 'vi' 
+//                 ? 'Ứng dụng điều khiển sa bàn thông minh kết nối qua mạng LAN/Cloud.'
+//                 : 'Smart scale model control application via LAN/Cloud connection.'),
+//             ],
+//           );
+//         },
+//       ),
+//     ),
+//   ],
+// )
+//       ],
+//     ),
+//   );
+// }
+
 Widget _buildTopBar(BuildContext context) {
   return Padding(
     padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
@@ -2940,10 +3323,14 @@ Widget _buildTopBar(BuildContext context) {
           ),
           child: PopupMenuButton<String>(
             constraints: const BoxConstraints(minWidth: 280, maxWidth: 320),
-            icon: const Icon(Icons.menu_rounded,
-                color: Color(0xFF0369A1), size: 22),
+            icon: const Icon(
+              Icons.menu_rounded,
+              color: Color(0xFF0369A1),
+              size: 22,
+            ),
             shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16)),
+              borderRadius: BorderRadius.circular(16),
+            ),
             onSelected: (value) {
               if (value == 'demo_mode') {
                 setState(() {
@@ -2968,102 +3355,131 @@ Widget _buildTopBar(BuildContext context) {
               }
             },
             itemBuilder: (BuildContext context) => [
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'demo_mode',
                 child: Row(
                   children: [
-                    Icon(Icons.cloud_done_rounded,
+                    const Icon(Icons.cloud_done_rounded,
                         color: Color(0xFF0284C7), size: 20),
-                    SizedBox(width: 10),
+                    const SizedBox(width: 10),
                     Expanded(
-                      child: Text('Dùng Sa Bàn Demo Cloud',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                          overflow: TextOverflow.ellipsis),
+                      child: Text(
+                        _selectedLang == 'vi'
+                            ? 'Dùng Sa Bàn Demo Cloud'
+                            : 'Use Cloud Demo Model',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ],
                 ),
               ),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'real_mode',
                 child: Row(
                   children: [
-                    Icon(Icons.lan_rounded, color: Colors.green, size: 20),
-                    SizedBox(width: 10),
+                    const Icon(Icons.lan_rounded,
+                        color: Colors.green, size: 20),
+                    const SizedBox(width: 10),
                     Expanded(
-                      child: Text('Dùng Sa Bàn Thực (Mạng LAN)',
-                          overflow: TextOverflow.ellipsis),
+                      child: Text(
+                        _selectedLang == 'vi'
+                            ? 'Dùng Sa Bàn Thực (Mạng LAN)'
+                            : 'Use Real Model (LAN)',
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ],
                 ),
               ),
               const PopupMenuDivider(),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'web_demo',
                 child: Row(
                   children: [
-                    Icon(Icons.open_in_browser_rounded,
+                    const Icon(Icons.open_in_browser_rounded,
                         color: Color(0xFF0284C7), size: 20),
-                    SizedBox(width: 10),
+                    const SizedBox(width: 10),
                     Expanded(
-                      child: Text('Mở Dashboard Web Demo',
-                          overflow: TextOverflow.ellipsis),
+                      child: Text(
+                        _selectedLang == 'vi'
+                            ? 'Mở Dashboard Web Demo'
+                            : 'Open Web Demo Dashboard',
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ],
                 ),
               ),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'edit_image',
                 child: Row(
                   children: [
-                    Icon(Icons.edit_note_rounded,
+                    const Icon(Icons.edit_note_rounded,
                         color: Color(0xFF0369A1), size: 20),
-                    SizedBox(width: 10),
+                    const SizedBox(width: 10),
                     Expanded(
-                      child: Text('Chỉnh Sửa Tiêu Đề / Ảnh Banner',
-                          overflow: TextOverflow.ellipsis),
+                      child: Text(
+                        _selectedLang == 'vi'
+                            ? 'Chỉnh Sửa Tiêu Đề / Ảnh Banner'
+                            : 'Edit Title / Banner Image',
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ],
                 ),
               ),
               const PopupMenuDivider(),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'download_firmware',
                 child: Row(
                   children: [
-                    Icon(Icons.download_for_offline_rounded,
+                    const Icon(Icons.download_for_offline_rounded,
                         color: Color(0xFF0284C7), size: 20),
-                    SizedBox(width: 10),
+                    const SizedBox(width: 10),
                     Expanded(
-                      child: Text('1. Tải Firmware .bin về điện thoại',
-                          overflow: TextOverflow.ellipsis),
+                      child: Text(
+                        _selectedLang == 'vi'
+                            ? '1. Tải Firmware .bin về điện thoại'
+                            : '1. Download Firmware .bin to Phone',
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ],
                 ),
               ),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'upload_ota',
                 child: Row(
                   children: [
-                    Icon(Icons.system_update_rounded,
+                    const Icon(Icons.system_update_rounded,
                         color: Colors.orange, size: 20),
-                    SizedBox(width: 10),
+                    const SizedBox(width: 10),
                     Expanded(
-                      child: Text('2. Nạp file .bin vào ESP32 (Web OTA)',
-                          overflow: TextOverflow.ellipsis),
+                      child: Text(
+                        _selectedLang == 'vi'
+                            ? '2. Nạp file .bin vào ESP32 (Web OTA)'
+                            : '2. Upload .bin to ESP32 (Web OTA)',
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ],
                 ),
               ),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'open_chrome_ota',
                 child: Row(
                   children: [
-                    Icon(Icons.chrome_reader_mode_rounded,
+                    const Icon(Icons.chrome_reader_mode_rounded,
                         color: Colors.green, size: 20),
-                    SizedBox(width: 10),
+                    const SizedBox(width: 10),
                     Expanded(
-                      child: Text('Mở Trang Nạp OTA Trên Trình Duyệt',
-                          overflow: TextOverflow.ellipsis),
+                      child: Text(
+                        _selectedLang == 'vi'
+                            ? 'Mở Trang Nạp OTA Trên Trình Duyệt'
+                            : 'Open OTA Page in Browser',
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ],
                 ),
@@ -3072,36 +3488,219 @@ Widget _buildTopBar(BuildContext context) {
           ),
         ),
 
-        // 🟢 2. Nút Icon Information bên phải
-        Container(
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: Colors.white.withValues(alpha: 0.9),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF0284C7).withValues(alpha: 0.12),
-                blurRadius: 10,
-                offset: const Offset(0, 3),
-              ),
-            ],
+        // 2. Cụm nút bên phải: Chuyển ngôn ngữ & Thông tin
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // // 🟢 Nút chuyển đổi Ngôn Ngữ VN / EN
+            // GestureDetector(
+            //   onTap: () {
+            //     setState(() {
+            //       _selectedLang = (_selectedLang == 'vi') ? 'en' : 'vi';
+            //     });
+            //   },
+            //   child: Container(
+            //     padding:
+            //         const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            //     decoration: BoxDecoration(
+            //       color: Colors.white.withValues(alpha: 0.9),
+            //       borderRadius: BorderRadius.circular(20),
+            //       boxShadow: [
+            //         BoxShadow(
+            //           color: const Color(0xFF0284C7).withValues(alpha: 0.12),
+            //           blurRadius: 10,
+            //           offset: const Offset(0, 3),
+            //         ),
+            //       ],
+            //     ),
+            //     child: Row(
+            //       mainAxisSize: MainAxisSize.min,
+            //       children: [
+            //         Text(
+            //           _selectedLang == 'vi' ? '🇻🇳 VN' : '🇬🇧 EN',
+            //           style: const TextStyle(
+            //             fontWeight: FontWeight.bold,
+            //             fontSize: 13,
+            //             color: Color(0xFF0369A1),
+            //           ),
+            //         ),
+            //         const SizedBox(width: 4),
+            //         const Icon(
+            //           Icons.swap_horiz_rounded,
+            //           size: 16,
+            //           color: Color(0xFF0369A1),
+            //         ),
+            //       ],
+            //     ),
+            //   ),
+            // ),
+            // 🟢 THIẾT KẾ THANH GẠT CHUYỂN NGÔN NGỮ (VN ↔ EN)
+// 🟢 CODE THANH GẠT CHUẨN CÂN ĐỐI (KHÔNG BỊ CHE CHỮ)
+// 🟢 THANH GẠT PHONG CÁCH SEGMENTED CONTROL (CỰC KỲ ĐẸP & RÕ RÀNG)
+GestureDetector(
+  // onTap: () {
+  //   setState(() {
+  //     _selectedLang = (_selectedLang == 'vi') ? 'en' : 'vi';
+  //     _appTitle = _selectedLang == 'vi'
+  //         ? 'ĐIỀU KHIỂN SA BÀN THÔNG MINH'
+  //         : 'SMART SCALE MODEL CONTROLLER';
+  //   });
+  //   debugPrint("🌐 Switched Language to: $_selectedLang");
+  // },
+  onTap: () async {
+  final newLang = (_selectedLang == 'vi') ? 'en' : 'vi';
+  
+  setState(() {
+    _selectedLang = newLang;
+    _appTitle = _selectedLang == 'vi'
+        ? 'ĐIỀU KHIỂN SA BÀN THÔNG MINH'
+        : 'SMART SCALE MODEL CONTROLLER';
+  });
+
+  // 🟢 Lưu lại ngôn ngữ vừa chọn vào bộ nhớ thiết bị
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setString('app_language', newLang);
+
+  debugPrint("🌐 Switched Language to: $_selectedLang");
+},
+  child: Container(
+    width: 96, // 🟢 Độ rộng thoải mái cho chữ và cờ
+    height: 38,
+    padding: const EdgeInsets.all(3),
+    decoration: BoxDecoration(
+      color: const Color(0xFFE0F2FE), // Nền xanh nhạt
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(
+        color: const Color(0xFF0284C7).withValues(alpha: 0.25),
+        width: 1.5,
+      ),
+      boxShadow: [
+        BoxShadow(
+          color: const Color(0xFF0284C7).withValues(alpha: 0.12),
+          blurRadius: 8,
+          offset: const Offset(0, 3),
+        ),
+      ],
+    ),
+    child: Stack(
+      children: [
+        // 1. Lớp chữ ẩn nằm bên dưới (Dành cho trạng thái không chọn)
+        const Positioned.fill(
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 10),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'VN',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF0369A1),
+                  ),
+                ),
+                Text(
+                  'EN',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF0369A1),
+                  ),
+                ),
+              ],
+            ),
           ),
-          child: IconButton(
-            icon: const Icon(Icons.info_outline_rounded,
-                color: Color(0xFF0369A1), size: 22),
-            onPressed: () {
-              showAboutDialog(
-                context: context,
-                applicationName: _appTitle,
-                applicationVersion: 'v1.0.2',
-                applicationIcon: const Icon(Icons.domain_rounded,
-                    color: Color(0xFF0284C7), size: 36),
-                children: const [
-                  Text(
-                      'Ứng dụng điều khiển sa bàn thông minh kết nối qua mạng LAN/Cloud.'),
+        ),
+
+        // 2. Cục trượt màu trắng nổi hẳn lên chứa Cờ + Chữ của Ngôn ngữ đang chọn
+        AnimatedAlign(
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeInOut,
+          alignment: _selectedLang == 'vi'
+              ? Alignment.centerLeft
+              : Alignment.centerRight,
+          child: Container(
+            width: 44, // 🟢 Chiều rộng khối nổi
+            height: 32,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF0284C7).withValues(alpha: 0.2),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  _selectedLang == 'vi' ? '🇻🇳' : '🇬🇧',
+                  style: const TextStyle(fontSize: 13),
+                ),
+                const SizedBox(width: 2),
+                Text(
+                  _selectedLang == 'vi' ? 'VN' : 'EN',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF0284C7),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    ),
+  ),
+),
+
+            const SizedBox(width: 8),
+
+            // 🟢 Nút Thông tin app
+            Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.9),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF0284C7).withValues(alpha: 0.12),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
+                  ),
                 ],
-              );
-            },
-          ),
+              ),
+              child: IconButton(
+                icon: const Icon(
+                  Icons.info_outline_rounded,
+                  color: Color(0xFF0369A1),
+                  size: 22,
+                ),
+                onPressed: () {
+                  showAboutDialog(
+                    context: context,
+                    applicationName: _appTitle,
+                    applicationVersion: 'v1.0.2',
+                    applicationIcon: const Icon(
+                      Icons.domain_rounded,
+                      color: Color(0xFF0284C7),
+                      size: 36,
+                    ),
+                    children: [
+                      Text(
+                        _selectedLang == 'vi'
+                            ? 'Ứng dụng điều khiển sa bàn thông minh kết nối qua mạng LAN/Cloud.'
+                            : 'Smart scale model control application via LAN/Cloud connection.',
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ],
         ),
       ],
     ),

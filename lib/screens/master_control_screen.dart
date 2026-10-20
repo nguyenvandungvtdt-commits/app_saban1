@@ -26,6 +26,7 @@ class MasterControlScreen extends StatefulWidget {
   final String? cachedJson;
   final Map<String, dynamic>? configData;
   final Map<int, bool> ledStates;
+  final String currentLang; // 🟢 1. KHAI BÁO THÊM TRƯỜNG NÀY
   const MasterControlScreen({
     super.key,
     required this.channel,
@@ -33,6 +34,7 @@ class MasterControlScreen extends StatefulWidget {
     this.cachedJson,
     this.configData,
     required this.ledStates,
+    this.currentLang = 'vi', // 🟢 2. THÊM VÀO CONSTRUCTOR (Mặc định 'vi')
   });
   @override
   State<MasterControlScreen> createState() => _MasterControlScreenState();
@@ -53,6 +55,8 @@ class _MasterControlScreenState extends State<MasterControlScreen> {
   bool _isRefreshing = false;
   bool _isMotorActive = false;
   bool _isOTAUploading = false; // 🟢 Biến cờ đánh dấu đang nạp OTA
+  // Lấy nhanh biến currentLang truyền từ ConnectScreen sang
+  bool get _isEn => widget.currentLang == 'en';
   IOWebSocketChannel? _channel;
   String? localDownloadedBinPath;
   bool isConnected = false;
@@ -2516,7 +2520,8 @@ Widget _buildScaleCard(String label, String value, IconData icon) {
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
-                          'Mô-tơ Xe/Tàu Từ Trường',
+                          // 'Mô-tơ Xe/Tàu Từ Trường',
+                          _isEn ? 'Vehicle / Maglev Motor' : 'Mô-tơ Xe/Tàu Từ Trường',
                           style: TextStyle(
                             fontWeight: _isMotorActive ? FontWeight.bold : FontWeight.normal,
                             color: _isMotorActive ? const Color(0xFF0284C7) : Colors.black87,
@@ -2535,64 +2540,85 @@ Widget _buildScaleCard(String label, String value, IconData icon) {
                   ),
                 ),
                 const PopupMenuDivider(),
-                const PopupMenuItem(
-                  value: 'effects',
-                  child: Row(
-                    children: [
-                      Icon(Icons.tune_rounded, color: Color(0xFF0284C7), size: 20),
-                      SizedBox(width: 10),
-                      Text('Chế độ & Tốc độ Hiệu ứng'),
-                    ],
-                  ),
-                ),
-                const PopupMenuItem(
+                // const PopupMenuItem(
+                //   value: 'effects',
+                //   child: Row(
+                //     children: [
+                //       Icon(Icons.tune_rounded, color: Color(0xFF0284C7), size: 20),
+                //       SizedBox(width: 10),
+                //       Text('Chế độ & Tốc độ Hiệu ứng'),
+                //     ],
+                //   ),
+                // ),
+                PopupMenuItem( // 🟢 Đã bỏ từ khóa 'const' ở đây
+  value: 'effects',
+  child: Row(
+    children: [
+      const Icon(Icons.tune_rounded, color: Color(0xFF0284C7), size: 20),
+      const SizedBox(width: 10),
+      Text(
+        _isEn ? 'Effects & Speed Control' : 'Chế độ & Tốc độ Hiệu ứng',
+      ),
+    ],
+  ),
+),
+                PopupMenuItem(
                   value: 'download_ota',
                   child: Row(
                     children: [
-                      Icon(Icons.download_for_offline_rounded, color: Color(0xFF0284C7), size: 20),
-                      SizedBox(width: 10),
-                      Text('1. Tải Firmware về Máy (.bin)'),
+                      const Icon(Icons.download_for_offline_rounded, color: Color(0xFF0284C7), size: 20),
+                     const SizedBox(width: 10),
+                      // 1. Tải Firmware về Máy (.bin)
+Text(_isEn ? '1. Download Firmware (.bin)' : '1. Tải Firmware về Máy (.bin)')
                     ],
                   ),
                 ),
-                const PopupMenuItem(
+                 PopupMenuItem(
                   value: 'upload_ota',
                   child: Row(
                     children: [
-                      Icon(Icons.upload_file_rounded, color: Colors.green, size: 20),
-                      SizedBox(width: 10),
-                      Text('2. Nạp File .bin Sang Sa Bàn'),
+                      const Icon(Icons.upload_file_rounded, color: Colors.green, size: 20),
+                      const SizedBox(width: 10),
+                      // Text('2. Nạp File .bin Sang Sa Bàn'),
+                      // 2. Nạp File .bin Sang Sa Bàn
+Text(_isEn ? '2. Upload .bin to Model' : '2. Nạp File .bin Sang Sa Bàn'),
                     ],
                   ),
                 ),
-                const PopupMenuItem(
+                 PopupMenuItem(
                   value: 'cloud',
                   child: Row(
                     children: [
-                      Icon(Icons.cloud_download_outlined, color: Color(0xFF0284C7), size: 20),
-                      SizedBox(width: 10),
-                      Text('Đồng bộ dữ liệu Cloud'),
+                      const Icon(Icons.cloud_download_outlined, color: Color(0xFF0284C7), size: 20),
+                      const SizedBox(width: 10),
+                      // Text('Đồng bộ dữ liệu Cloud'),
+                      // Đồng bộ dữ liệu Cloud
+Text(_isEn ? 'Sync Cloud Data' : 'Đồng bộ dữ liệu Cloud'),
                     ],
                   ),
                 ),
-                const PopupMenuItem(
+                 PopupMenuItem(
                   value: 'edit',
                   child: Row(
                     children: [
-                      Icon(Icons.edit_note, color: Color(0xFF0284C7), size: 20),
-                      SizedBox(width: 10),
-                      Text('Chỉnh sửa tên & ảnh sa bàn'),
+                     const Icon(Icons.edit_note, color: Color(0xFF0284C7), size: 20),
+                     const SizedBox(width: 10),
+                      // Text('Chỉnh sửa tên & ảnh sa bàn'),
+                      // Chỉnh sửa tên & Ảnh sa bàn
+Text(_isEn ? 'Edit Name & Banner Image' : 'Chỉnh sửa tên & Ảnh sa bàn'),
                     ],
                   ),
                 ),
                 const PopupMenuDivider(),
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'reset',
                   child: Row(
                     children: [
-                      Icon(Icons.sync_disabled_outlined, color: Colors.redAccent, size: 20),
-                      SizedBox(width: 10),
-                      Text('Đổi IP / Đặt lại kết nối', style: TextStyle(color: Colors.redAccent)),
+                      const  Icon(Icons.sync_disabled_outlined, color: Colors.redAccent, size: 20),
+                      const  SizedBox(width: 10),
+                      // Text('Đổi IP / Đặt lại kết nối', style: TextStyle(color: Colors.redAccent)),
+                      // Đổi IP / Đặt lại kết nối
+Text(_isEn ? 'Change IP / Reset Connection' : 'Đổi IP / Đặt lại kết nối',  style: TextStyle(color: Colors.redAccent)),
                     ],
                   ),
                 ),
@@ -2719,28 +2745,53 @@ void dispose() {
   @override
 @override
 Widget build(BuildContext context) {
+  // if (!_isLoaded) {
+  //   return const Scaffold(
+  //     backgroundColor: Color(0xFFF0F9FF),
+  //     body: Center(
+  //       child: Column(
+  //         mainAxisSize: MainAxisSize.min,
+  //         children: [
+  //           CircularProgressIndicator(color: Color(0xFF0284C7)),
+  //           SizedBox(height: 16),
+  //           Text(
+  //             'Đang tải dữ liệu sa bàn mới nhất...',
+  //             style: TextStyle(
+  //               color: Color(0xFF0369A1),
+  //               fontSize: 16,
+  //               fontWeight: FontWeight.w500,
+  //             ),
+  //           ),
+  //         ],
+  //       ),
+  //     ),
+  //   );
+  // }
+
   if (!_isLoaded) {
-    return const Scaffold(
-      backgroundColor: Color(0xFFF0F9FF),
-      body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CircularProgressIndicator(color: Color(0xFF0284C7)),
-            SizedBox(height: 16),
-            Text(
-              'Đang tải dữ liệu sa bàn mới nhất...',
-              style: TextStyle(
-                color: Color(0xFF0369A1),
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-              ),
+  return Scaffold( // 🟢 Đã xóa từ khóa 'const' ở đây
+    backgroundColor: const Color(0xFFF0F9FF),
+    body: Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const CircularProgressIndicator(color: Color(0xFF0284C7)),
+          const SizedBox(height: 16),
+          Text(
+            _isEn
+                ? 'Loading latest scale model data...'
+                : 'Đang tải dữ liệu sa bàn mới nhất...',
+            style: const TextStyle(
+              color: Color(0xFF0369A1),
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
-    );
-  }
+    ),
+  );
+}
   List<int> allSabanLeds = _getAllSabanLeds();
   bool isMasterOn = _areAllLedsOn(allSabanLeds);
 return Scaffold(
