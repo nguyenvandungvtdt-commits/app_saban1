@@ -580,8 +580,152 @@ Future<bool> uploadToElegantOTA(String filePath, String esp32Ip) async {
     }
     return leds;
   }
+// Future<void> _downloadFirmwareToPhone() async {
+//   if (!mounted) return;
+//   ScaffoldMessenger.of(context).showSnackBar(
+//     const SnackBar(
+//       content: Row(
+//         children: [
+//           SizedBox(
+//             width: 18,
+//             height: 18,
+//             child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+//           ),
+//           SizedBox(width: 12),
+//           Text('Đang kiểm tra link Firmware từ Cloud...'),
+//         ],
+//       ),
+//       duration: Duration(seconds: 2),
+//     ),
+//   );
+//   try {
+//     String binUrl = '';
+//     String version = '1.0.2';
+//     try {
+//       final configData = await _loadRemoteConfigFast();
+//       final firmwareInfo = configData['firmware_info'];
+//       if (firmwareInfo != null && firmwareInfo['bin_url'] != null) {
+//         binUrl = firmwareInfo['bin_url'].toString().trim();
+//         version = firmwareInfo['version'] ?? '1.0.2';
+//       }
+//     } catch (_) {}
+//     if (binUrl.isEmpty) {
+//       final releaseInfo = await fetchLatestRelease();
+//       if (releaseInfo != null) {
+//         binUrl = releaseInfo['download_url']!;
+//         version = releaseInfo['version']!;
+//       }
+//     }
+//     if (binUrl.isEmpty) {
+//       if (mounted) _showErrorSnackBar('Không tìm thấy link Firmware!');
+//       return;
+//     }
+//     if (!mounted) return;
+//     showDialog(
+//       context: context,
+//       builder: (dialogContext) {
+//         double downloadProgress = 0.0;
+//         bool isDownloading = false;
+//         StateSetter? setDialogState;
+//         return StatefulBuilder(
+//           builder: (context, setStateDialog) {
+//             setDialogState = setStateDialog;
+//             return AlertDialog(
+//               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+//               title: const Row(
+//                 children: [
+//                   Icon(Icons.download_for_offline_rounded, color: Color(0xFF0284C7)),
+//                   SizedBox(width: 10),
+//                   Text('Tải Firmware Về Máy', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+//                 ],
+//               ),
+//               content: Column(
+//                 mainAxisSize: MainAxisSize.min,
+//                 crossAxisAlignment: CrossAxisAlignment.start,
+//                 children: [
+//                   Text('• Phiên bản: v$version', style: const TextStyle(fontWeight: FontWeight.bold)),
+//                   const SizedBox(height: 8),
+//                   if (isDownloading) ...[
+//                     LinearProgressIndicator(value: downloadProgress, color: const Color(0xFF0284C7)),
+//                     const SizedBox(height: 8),
+//                     Text('${(downloadProgress * 100).toInt()}% - Đang tải file .bin...'),
+//                   ] else ...[
+//                     const Text('File .bin sẽ được tải về lưu trữ tại thư mục Download/bin_esp32 của điện thoại.'),
+//                   ],
+//                 ],
+//               ),
+//               actions: [
+//                 if (!isDownloading) ...[
+//                   TextButton(
+//                     onPressed: () => Navigator.pop(dialogContext),
+//                     child: const Text('Hủy'),
+//                   ),
+//                   ElevatedButton.icon(
+//                     style: ElevatedButton.styleFrom(
+//                       backgroundColor: const Color(0xFF0284C7),
+//                       foregroundColor: Colors.white,
+//                     ),
+//                     icon: const Icon(Icons.download_rounded, size: 18),
+//                     label: const Text('Bắt Đầu Tải'),
+// onPressed: () async {
+//   final messengerState = ScaffoldMessenger.of(context);
+//   if (setDialogState != null) {
+//     setDialogState!(() {
+//       isDownloading = true;
+//       downloadProgress = 0.3; // Bắt đầu hiệu ứng chạy progress
+//     });
+//   }
+//   try {
+//     final savedPath = await FirmwareService.downloadToBinFolder(binUrl, version: version);
+//     if (savedPath != null) {
+//       if (mounted) {
+//         setState(() {
+//           localDownloadedBinPath = savedPath;
+//         });
+//       }
+//       if (setDialogState != null) {
+//         setDialogState!(() {
+//           downloadProgress = 1.0;
+//         });
+//       }
+//       await Future.delayed(const Duration(milliseconds: 500));
+//       if (dialogContext.mounted) {
+//         Navigator.pop(dialogContext);
+//       }
+//       messengerState.showSnackBar(
+//         SnackBar(
+//           content: Text('Đã tải v$version vào thư mục bin_esp32!'),
+//           backgroundColor: Colors.green,
+//         ),
+//       );
+//     } else {
+//       throw Exception("Không thể lưu file .bin vào bộ nhớ.");
+//     }
+//   } catch (e) {
+//     if (dialogContext.mounted) {
+//       Navigator.pop(dialogContext);
+//     }
+//     if (mounted) {
+//       _showErrorSnackBar('Tải file thất bại: $e');
+//     }
+//   }
+// },
+//                   ),
+//                 ],
+//               ],
+//             );
+//           },
+//         );
+//       },
+//     );
+//   } catch (e) {
+//     if (mounted) _showErrorSnackBar('Lỗi tải cấu hình: $e');
+//   }
+// }
+
 Future<void> _downloadFirmwareToPhone() async {
   if (!mounted) return;
+
   ScaffoldMessenger.of(context).showSnackBar(
     const SnackBar(
       content: Row(
@@ -598,35 +742,54 @@ Future<void> _downloadFirmwareToPhone() async {
       duration: Duration(seconds: 2),
     ),
   );
+
   try {
     String binUrl = '';
-    String version = '1.0.2';
+    String? version; // 🟢 Để null mặc định thay vì gán cứng '1.0.2'
+
+    // 1. Thử lấy thông tin từ Remote Config
     try {
       final configData = await _loadRemoteConfigFast();
       final firmwareInfo = configData['firmware_info'];
       if (firmwareInfo != null && firmwareInfo['bin_url'] != null) {
         binUrl = firmwareInfo['bin_url'].toString().trim();
-        version = firmwareInfo['version'] ?? '1.0.2';
+        if (firmwareInfo['version'] != null) {
+          version = firmwareInfo['version'].toString().trim();
+        }
       }
     } catch (_) {}
+
+    // 2. Nếu không có, thử lấy từ GitHub Release / API cập nhật
     if (binUrl.isEmpty) {
       final releaseInfo = await fetchLatestRelease();
       if (releaseInfo != null) {
         binUrl = releaseInfo['download_url']!;
-        version = releaseInfo['version']!;
+        version = releaseInfo['version'];
       }
     }
+
     if (binUrl.isEmpty) {
       if (mounted) _showErrorSnackBar('Không tìm thấy link Firmware!');
       return;
     }
+
     if (!mounted) return;
+
+    // Chuỗi hiển thị phiên bản trên UI dialog
+    final displayVersion = version != null ? 'v$version' : 'Mới nhất (Latest)';
+
+    // Chuẩn bị văn bản thông báo theo hệ điều hành
+    final String storageNoticeText = Platform.isAndroid
+        ? 'File .bin sẽ được tải về lưu trữ tại thư mục Download/bin_esp32 của điện thoại.'
+        : 'File .bin sẽ được tải vào mục "Trên iPad của tôi" > Thư mục App > bin_esp32 (Mở ứng dụng Tệp để xem).';
+
     showDialog(
       context: context,
       builder: (dialogContext) {
         double downloadProgress = 0.0;
         bool isDownloading = false;
         StateSetter? setDialogState;
+
         return StatefulBuilder(
           builder: (context, setStateDialog) {
             setDialogState = setStateDialog;
@@ -643,14 +806,14 @@ Future<void> _downloadFirmwareToPhone() async {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('• Phiên bản: v$version', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  Text('• Phiên bản: $displayVersion', style: const TextStyle(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
                   if (isDownloading) ...[
                     LinearProgressIndicator(value: downloadProgress, color: const Color(0xFF0284C7)),
                     const SizedBox(height: 8),
                     Text('${(downloadProgress * 100).toInt()}% - Đang tải file .bin...'),
                   ] else ...[
-                    const Text('File .bin sẽ được tải về lưu trữ tại thư mục Download/bin_esp32 của điện thoại.'),
+                    Text(storageNoticeText),
                   ],
                 ],
               ),
@@ -667,49 +830,61 @@ Future<void> _downloadFirmwareToPhone() async {
                     ),
                     icon: const Icon(Icons.download_rounded, size: 18),
                     label: const Text('Bắt Đầu Tải'),
-onPressed: () async {
-  final messengerState = ScaffoldMessenger.of(context);
-  if (setDialogState != null) {
-    setDialogState!(() {
-      isDownloading = true;
-      downloadProgress = 0.3; // Bắt đầu hiệu ứng chạy progress
-    });
-  }
-  try {
-    final savedPath = await FirmwareService.downloadToBinFolder(binUrl, version: version);
-    if (savedPath != null) {
-      if (mounted) {
-        setState(() {
-          localDownloadedBinPath = savedPath;
-        });
-      }
-      if (setDialogState != null) {
-        setDialogState!(() {
-          downloadProgress = 1.0;
-        });
-      }
-      await Future.delayed(const Duration(milliseconds: 500));
-      if (dialogContext.mounted) {
-        Navigator.pop(dialogContext);
-      }
-      messengerState.showSnackBar(
-        SnackBar(
-          content: Text('Đã tải v$version vào thư mục bin_esp32!'),
-          backgroundColor: Colors.green,
-        ),
-      );
-    } else {
-      throw Exception("Không thể lưu file .bin vào bộ nhớ.");
-    }
-  } catch (e) {
-    if (dialogContext.mounted) {
-      Navigator.pop(dialogContext);
-    }
-    if (mounted) {
-      _showErrorSnackBar('Tải file thất bại: $e');
-    }
-  }
-},
+                    onPressed: () async {
+                      final messengerState = ScaffoldMessenger.of(context);
+                      if (setDialogState != null) {
+                        setDialogState!(() {
+                          isDownloading = true;
+                          downloadProgress = 0.1;
+                        });
+                      }
+                      try {
+                        // 🟢 Tải file .bin thông qua FirmwareService
+                        final savedPath = await FirmwareService.downloadToBinFolder(
+                          binUrl,
+                          version: version, // Nếu null, FirmwareService sẽ tự lưu tên 'firmware_latest.bin'
+                          onProgress: (received, total) {
+                            if (total != -1 && setDialogState != null) {
+                              setDialogState!(() {
+                                downloadProgress = received / total;
+                              });
+                            }
+                          },
+                        );
+
+                        if (mounted) {
+                          setState(() {
+                            localDownloadedBinPath = savedPath;
+                          });
+                        }
+                        if (setDialogState != null) {
+                          setDialogState!(() {
+                            downloadProgress = 1.0;
+                          });
+                        }
+                        await Future.delayed(const Duration(milliseconds: 500));
+                        if (dialogContext.mounted) {
+                          Navigator.pop(dialogContext);
+                        }
+                        messengerState.showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              Platform.isAndroid
+                                  ? 'Đã tải $displayVersion vào thư mục Download/bin_esp32!'
+                                  : 'Đã tải $displayVersion vào ứng dụng Tệp (Trên iPad của tôi)!',
+                            ),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      } catch (e) {
+                        if (dialogContext.mounted) {
+                          Navigator.pop(dialogContext);
+                        }
+                        if (mounted) {
+                          _showErrorSnackBar('Tải file thất bại: $e');
+                        }
+                      }
+                    },
                   ),
                 ],
               ],
@@ -722,22 +897,68 @@ onPressed: () async {
     if (mounted) _showErrorSnackBar('Lỗi tải cấu hình: $e');
   }
 }
+// Future<void> _uploadLocalBinToESP32() async {
+//   setState(() {
+//     _isOTAUploading = true;
+//   });
+//   await Navigator.push(
+//     context,
+//     MaterialPageRoute(
+//       builder: (context) => WebOTAScreen(ip: widget.ip),
+//     ),
+//   );
+//   if (mounted) {
+//     setState(() {
+//       _isOTAUploading = false;
+//     });
+//     _connect(); 
+//   }
+// }
 Future<void> _uploadLocalBinToESP32() async {
+  // 1. Tìm đường dẫn file .bin từ bộ nhớ tạm hoặc quét thư mục
+  String? binPath = FirmwareService.localDownloadedBinPath;
+
+  if (binPath == null || !await File(binPath).exists()) {
+    final latestFile = await FirmwareService.getLatestDownloadedBinFile();
+    if (latestFile != null) {
+      binPath = latestFile.path;
+      FirmwareService.localDownloadedBinPath = binPath;
+    }
+  }
+
+  // 🟢 Điểm kiểm tra an toàn 1 (Trước khi dùng context để hiển thị SnackBar)
+  if (!mounted) return;
+
+  // 2. Nếu không tìm thấy file nào thì báo lỗi
+  if (binPath == null || !await File(binPath).exists()) {
+    _showErrorSnackBar('Không tìm thấy file Firmware (.bin) nào! Vui lòng tải Firmware trước.');
+    return;
+  }
+
   setState(() {
     _isOTAUploading = true;
   });
+
+  // 🟢 Điểm kiểm tra an toàn 2 (Trước khi mở màn hình WebOTAScreen)
+  if (!mounted) return;
+
   await Navigator.push(
     context,
     MaterialPageRoute(
-      builder: (context) => WebOTAScreen(ip: widget.ip),
+      builder: (context) => WebOTAScreen(
+        ip: widget.ip,
+        binFilePath: binPath,
+      ),
     ),
   );
-  if (mounted) {
-    setState(() {
-      _isOTAUploading = false;
-    });
-    _connect(); 
-  }
+
+  // 🟢 Điểm kiểm tra an toàn 3 (Sau khi từ WebOTAScreen quay trở lại)
+  if (!mounted) return;
+
+  setState(() {
+    _isOTAUploading = false;
+  });
+  _connect();
 }
 void _connect() {
   final ip = widget.ip.isNotEmpty ? widget.ip : _ipController.text.trim();
