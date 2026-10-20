@@ -1879,6 +1879,8 @@ import '../widgets/dynamic_image.dart'; // 🟢 Dùng DynamicImage widget đa n�
 import 'master_control_screen.dart';
 import '../services/firmware_service.dart';
 import 'dart:io'; // 👈 Thêm dòng này vào đầu file
+import 'package:web_socket_channel/io.dart';
+// import 'package:web_socket_channel/web_socket_channel.dart';
 // 🟢 GIẢ ĐỊNH DÙNG CÁC SERVICE NHƯ BÊN MASTER SCREEN (Hãy đảm bảo đã import đúng file của dự án)
 // import 'services/firmware_service.dart';
 // import 'screens/web_ota_screen.dart';
@@ -1908,6 +1910,8 @@ String _bgImagePath = 'assets/images/background.png';
   // 🟢 State lưu đường dẫn file bin đã tải về điện thoại
   String? localDownloadedBinPath;
   bool _isOTAUploading = false;
+  bool isConnected = false;     // Khai báo biến isConnected
+  IOWebSocketChannel? _channel; // Khai báo biến _channel
 
   @override
   void initState() {
@@ -2593,6 +2597,85 @@ Future<void> _downloadFirmwareToPhone() async {
 //   }
 // }
 // 🟢 2. HÀM CHUYỂN SANG MÀN HÌNH WEB OTA NẠP FILE BIN
+  // Future<void> _uploadLocalBinToESP32() async {
+  //   final ip = _ipController.text.trim();
+
+  //   if (!_isValidServerAddress(ip)) {
+  //     _showErrorSnackBar(
+  //       _selectedLang == 'vi'
+  //           ? 'Vui lòng nhập địa chỉ IP/Server hợp lệ!'
+  //           : 'Please enter a valid IP address or Server URL!',
+  //     );
+  //     return;
+  //   }
+
+  //   // 🟢 1. Tìm đường dẫn file .bin đã lưu trong bộ nhớ hoặc quét thư mục bin_esp32
+  //   String? binPath = FirmwareService.localDownloadedBinPath;
+
+  //   if (binPath == null || !await File(binPath).exists()) {
+  //     final latestFile = await FirmwareService.getLatestDownloadedBinFile();
+  //     if (latestFile != null) {
+  //       binPath = latestFile.path;
+  //       FirmwareService.localDownloadedBinPath = binPath;
+  //     }
+  //   }
+
+  //   // Kiểm tra an toàn trước khi gọi SnackBar
+  //   if (!mounted) return;
+
+  //   // 🟢 2. Nếu chưa có file .bin nào thì thông báo cho người dùng tải trước
+  //   if (binPath == null || !await File(binPath).exists()) {
+  //     _showErrorSnackBar(
+  //       _selectedLang == 'vi'
+  //           ? 'Không tìm thấy file Firmware (.bin) nào! Vui lòng tải Firmware trước.'
+  //           : 'No Firmware (.bin) file found! Please download the Firmware first.',
+  //     );
+  //     return;
+  //   }
+
+  //   setState(() {
+  //     _isOTAUploading = true;
+  //   });
+
+  //   // Kiểm tra an toàn trước khi gọi Navigator
+  //   if (!mounted) return;
+
+  //   // 🟢 3. Mở màn hình WebOTAScreen và truyền IP cùng đường dẫn file .bin đã tìm thấy
+  //   await Navigator.push(
+  //     context,
+  //     MaterialPageRoute(
+  //       builder: (context) => WebOTAScreen(
+  //         ip: ip,
+  //         binFilePath: binPath, // Truyền file .bin đã trỏ chính xác
+  //       ),
+  //     ),
+  //   );
+
+  //   // Kiểm tra an toàn sau khi người dùng thoát khỏi WebOTAScreen quay về
+  //   if (!mounted) return;
+
+  //   setState(() {
+  //     _isOTAUploading = false;
+  //   });
+
+  //   // Tự động kiểm tra lại kết nối sau khi nạp OTA xong
+  //   _connect();
+  // }
+  void _disconnect() {
+  try {
+    _channel?.sink.close();
+    _channel = null;
+    if (mounted) {
+      setState(() {
+        isConnected = false;
+      });
+    }
+    debugPrint('[WS] Đã ngắt kết nối WebSocket cũ sạch sẽ.');
+  } catch (e) {
+    debugPrint('[WS] Lỗi khi đóng ngắt kết nối: $e');
+  }
+}
+  // 🟢 2. HÀM CHUYỂN SANG MÀN HÌNH WEB OTA NẠP FILE BIN
   Future<void> _uploadLocalBinToESP32() async {
     final ip = _ipController.text.trim();
 
@@ -2629,6 +2712,9 @@ Future<void> _downloadFirmwareToPhone() async {
       return;
     }
 
+    // 🔴 BỔ SUNG: Ngắt kết nối socket cũ trước khi nạp
+    _disconnect();
+
     setState(() {
       _isOTAUploading = true;
     });
@@ -2636,8 +2722,8 @@ Future<void> _downloadFirmwareToPhone() async {
     // Kiểm tra an toàn trước khi gọi Navigator
     if (!mounted) return;
 
-    // 🟢 3. Mở màn hình WebOTAScreen và truyền IP cùng đường dẫn file .bin đã tìm thấy
-    await Navigator.push(
+    // 🟢 3. Mở màn hình WebOTAScreen và hứng kết quả isSuccess
+    final isSuccess = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
         builder: (context) => WebOTAScreen(
@@ -2654,8 +2740,37 @@ Future<void> _downloadFirmwareToPhone() async {
       _isOTAUploading = false;
     });
 
-    // Tự động kiểm tra lại kết nối sau khi nạp OTA xong
-    _connect();
+    // 🔴 BỔ SUNG: Chờ ESP32 reboot xong rồi mới tự động kết nối lại
+    if (isSuccess == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                _selectedLang == 'vi'
+                    ? 'Sa bàn đang khởi động lại... Tự động kết nối sau 4 giây.'
+                    : 'Device is rebooting... Reconnecting in 4 seconds.',
+              ),
+            ],
+          ),
+          duration: const Duration(seconds: 4),
+          backgroundColor: Colors.orange,
+        ),
+      );
+
+      await Future.delayed(const Duration(seconds: 4));
+
+      if (!mounted) return;
+      _connect();
+    } else {
+      _connect();
+    }
   }
 
   // 🟢 3. HÀM MỞ MÀN HÌNH WEB OTA TRÊN CHROME/TRÌNH DUYỆT NGOÀI
