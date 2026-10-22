@@ -40,9 +40,19 @@ class MasterControlScreen extends StatefulWidget {
   State<MasterControlScreen> createState() => _MasterControlScreenState();
 }
 class _MasterControlScreenState extends State<MasterControlScreen> {
-  late Map<int, bool> localLedStates;
+  // 🟢 1. Khai báo _ledStates dạng non-final để có thể gán lại
+  Map<int, bool> _ledStates = {};
+
+  // 🟢 2. Thêm khai báo biến _isLoading
+  // bool _isLoading = true;
+
+  // 🟢 3. Khai báo Subscription để lắng nghe WebSocket
+  StreamSubscription? _wsSubscription;
+  
+  // ... các biến khác giữ nguyên
+  // late Map<int, bool> localLedStates;
   final TextEditingController _ipController =
-      TextEditingController(text: '192.168.0.27');
+      TextEditingController(text: '192.168.0.200');
   String _projectName = 'Đang tải sa bàn...';
   List<Map<String, dynamic>> _buildings = [];
   Map<String, dynamic> _projectInfo = {};
@@ -50,7 +60,7 @@ class _MasterControlScreenState extends State<MasterControlScreen> {
   
   Map<String, dynamic> _dynamicUiConfig = {};
   String _overviewImage = 'assets/images/overview.jpg';
-  final Map<int, bool> _ledStates = {};
+  // final Map<int, bool> _ledStates = {};
   bool _isLoaded = false;
   bool _isRefreshing = false;
   bool _isMotorActive = false;
@@ -77,19 +87,158 @@ class _MasterControlScreenState extends State<MasterControlScreen> {
   void Function(String)? _onModeChangedFromHardware;
   VoidCallback? _onConfigReloadedFromCloud;
 @override
+// void initState() {
+//   super.initState(); 
+//   localLedStates = Map<int, bool>.from(widget.ledStates);
+//   if (widget.ip.isNotEmpty) {
+//     _ipController.text = widget.ip;
+//   }
+//   // 🟢 2. Gán giá trị nhận được từ widget sang _configData
+//     if (widget.configData != null) {
+//       _configData = widget.configData!;
+//     }
+//   Map<String, dynamic>? configToUse = widget.configData;
+//   if (configToUse != null && 
+//       (configToUse.containsKey('d') || configToUse.containsKey('ui_config') || configToUse.containsKey('buildings'))) {
+//     _dynamicUiConfig = configToUse['ui_config'] ?? {};
+//     _parseConfigMap(configToUse);
+//   } else if (widget.cachedJson != null && widget.cachedJson!.isNotEmpty) {
+//     _parseFlatJson(widget.cachedJson!, isFromCache: true);
+//   } else {
+//     _loadBackupConfigAndParse();
+//   }
+//   widget.channel.stream.listen(
+//   (data) {
+//     String message = data.toString().trim();
+//     if (message.startsWith('MODE:')) {
+//       String activeCmd = message.substring(5).trim();
+//       if (mounted) {
+//         setState(() {
+//           _activeEffect = activeCmd;
+//         });
+//         if (_onModeChangedFromHardware != null) {
+//           _onModeChangedFromHardware!(activeCmd);
+//         }
+//       }
+//     } 
+//     else if (message.startsWith('SYNCALL11:')) {
+//       _parseSyncAll11(message);
+//     } 
+//     else if (message.startsWith('TYPE:')) {
+//       final parts = message.split(':');
+//       if (parts.length >= 3) {
+//         final int targetType = int.tryParse(parts[1].trim()) ?? -1;
+//         final bool isOn = parts[2].trim() == '1';
+//         if (targetType != -1 && mounted) {
+//           setState(() {
+//             for (var b in _buildings) {
+//               for (var f in (b['floors'] as List? ?? [])) {
+//                 for (var r in (f['rooms'] as List? ?? [])) {
+//                   int rType = int.tryParse(r['room_type'].toString()) ?? -1;
+//                   int ledIdx = int.tryParse(r['led_index'].toString()) ?? -1;
+//                   if (rType == targetType && ledIdx != -1) {
+//                     localLedStates[ledIdx] = isOn;
+//                   }
+//                 }
+//               }
+//             }
+//           });
+//         }
+//       }
+//     }
+//     else if (message.startsWith('ALL:')) {
+//       final parts = message.split(':');
+//       if (parts.length >= 2) {
+//         final bool isOn = parts[1].trim() == '1';
+//         if (mounted) {
+//           setState(() {
+//             if (parts.length >= 3 && parts[2].trim().isNotEmpty) {
+//               final Set<int> targetIds = parts[2]
+//                   .split(',')
+//                   .map((e) => int.tryParse(e.trim()) ?? -1)
+//                   .where((id) => id != -1)
+//                   .toSet();
+//               for (var id in targetIds) {
+//                 localLedStates[id] = isOn;
+//               }
+//             } else {
+//               localLedStates.updateAll((key, value) => isOn);
+//             }
+//           });
+//         }
+//       }
+//     }
+//     else if (message.startsWith('{')) {
+//       try {
+//         final Map<String, dynamic> msgJson = jsonDecode(message);
+//         if (msgJson.containsKey('status') && msgJson.containsKey('device')) {
+//           debugPrint("Bỏ qua tin nhắn hệ thống chào hỏi: $message");
+//           return;
+//         }
+//         if (msgJson.containsKey('d') || msgJson.containsKey('buildings') || msgJson.containsKey('ui_config')) {
+//           _dynamicUiConfig = msgJson['ui_config'] ?? {};
+//           _parseConfigMap(msgJson);
+//         } else {
+//           _parseFlatJson(message, isFromCache: false);
+//         }
+//       } catch (e) {
+//         debugPrint("Lỗi parse JSON WebSocket: $e");
+//       }
+//     } 
+//     else if (message.contains(':') && !message.startsWith('OTA_')) {
+//       final parts = message.split(':');
+//       if (parts.length == 2) {
+//         final int? hwIndex = int.tryParse(parts[0].trim());
+//         final bool isOn = parts[1].trim() == '1';
+//         if (hwIndex != null && mounted) {
+//           setState(() {
+//             localLedStates[hwIndex] = isOn;
+//           });
+//         }
+//       }
+//     }
+//     else if (message == 'OTA_SUCCESS') {
+//       if (mounted) {
+//         Navigator.of(context, rootNavigator: true).pop();
+//         _showOTASuccessDialog();
+//       }
+//     } else if (message.startsWith('OTA_ERROR:')) {
+//       String errType = message.substring(10).trim();
+//       if (mounted) {
+//         _handleOTAErrorFromHardware(errType);
+//       }
+//     }
+//   },
+//   onError: (_) {
+//     if (!mounted) return;
+//     _handleDisconnection();
+//   },
+//   onDone: () {
+//     if (!mounted) return;
+//     _handleDisconnection();
+//   },
+// );
+// }
+// 1. Khai báo biến lưu StreamSubscription ở đầu class State
+// StreamSubscription? _wsSubscription;
+
+@override
 void initState() {
-  super.initState(); 
-  localLedStates = Map<int, bool>.from(widget.ledStates);
+  super.initState();
+  // 🟢 ĐỒNG BỘ NGUYÊN KHỐI: Dùng 1 biến _ledStates duy nhất
+  _ledStates = Map<int, bool>.from(widget.ledStates);
   if (widget.ip.isNotEmpty) {
     _ipController.text = widget.ip;
   }
-  // 🟢 2. Gán giá trị nhận được từ widget sang _configData
-    if (widget.configData != null) {
-      _configData = widget.configData!;
-    }
+  if (widget.configData != null) {
+    _configData = widget.configData!;
+  }
+  // 🟢 XỬ LÝ NẠP CONFIG & TẮT LOADING LẬP TỨC
   Map<String, dynamic>? configToUse = widget.configData;
-  if (configToUse != null && 
-      (configToUse.containsKey('d') || configToUse.containsKey('ui_config') || configToUse.containsKey('buildings'))) {
+  if (configToUse != null &&
+      (configToUse.containsKey('d') ||
+          configToUse.containsKey('ui_config') ||
+          configToUse.containsKey('buildings'))) {
     _dynamicUiConfig = configToUse['ui_config'] ?? {};
     _parseConfigMap(configToUse);
   } else if (widget.cachedJson != null && widget.cachedJson!.isNotEmpty) {
@@ -97,118 +246,140 @@ void initState() {
   } else {
     _loadBackupConfigAndParse();
   }
-  widget.channel.stream.listen(
-  (data) {
-    String message = data.toString().trim();
-    if (message.startsWith('MODE:')) {
-      String activeCmd = message.substring(5).trim();
-      if (mounted) {
-        setState(() {
-          _activeEffect = activeCmd;
-        });
-        if (_onModeChangedFromHardware != null) {
-          _onModeChangedFromHardware!(activeCmd);
-        }
-      }
-    } 
-    else if (message.startsWith('SYNCALL11:')) {
-      _parseSyncAll11(message);
-    } 
-    else if (message.startsWith('TYPE:')) {
-      final parts = message.split(':');
-      if (parts.length >= 3) {
-        final int targetType = int.tryParse(parts[1].trim()) ?? -1;
-        final bool isOn = parts[2].trim() == '1';
-        if (targetType != -1 && mounted) {
+
+  // 🟢 TẮT LOADING NGAY KHI PARSE XONG LOCAL CONFIG (0ms CHỜ)
+  if (mounted) {
+    setState(() {
+      _isLoaded = true;
+    });
+  }
+  // 🟢 GÁN CÁC EVENT WEBSOCKET VÀO BIẾN DỂ HỦY KHI DISPOSE
+  // _wsSubscription = widget.channel.stream.listen
+ try { 
+  _wsSubscription = widget.channel.stream.listen(
+    (data) {
+      String message = data.toString().trim();
+
+      if (message.startsWith('MODE:')) {
+        String activeCmd = message.substring(5).trim();
+        if (mounted) {
           setState(() {
-            for (var b in _buildings) {
-              for (var f in (b['floors'] as List? ?? [])) {
-                for (var r in (f['rooms'] as List? ?? [])) {
-                  int rType = int.tryParse(r['room_type'].toString()) ?? -1;
-                  int ledIdx = int.tryParse(r['led_index'].toString()) ?? -1;
-                  if (rType == targetType && ledIdx != -1) {
-                    localLedStates[ledIdx] = isOn;
+            _activeEffect = activeCmd;
+          });
+          if (_onModeChangedFromHardware != null) {
+            _onModeChangedFromHardware!(activeCmd);
+          }
+        }
+      } else if (message.startsWith('SYNCALL11:')) {
+        _parseSyncAll11(message);
+      } else if (message.startsWith('TYPE:')) {
+        final parts = message.split(':');
+        if (parts.length >= 3) {
+          final int targetType = int.tryParse(parts[1].trim()) ?? -1;
+          final bool isOn = parts[2].trim() == '1';
+          if (targetType != -1 && mounted) {
+            setState(() {
+              for (var b in _buildings) {
+                for (var f in (b['floors'] as List? ?? [])) {
+                  for (var r in (f['rooms'] as List? ?? [])) {
+                    int rType = int.tryParse(r['room_type'].toString()) ?? -1;
+                    int ledIdx = int.tryParse(r['led_index'].toString()) ?? -1;
+                    if (rType == targetType && ledIdx != -1) {
+                      _ledStates[ledIdx] = isOn; // 👈 Dùng duy nhất _ledStates
+                    }
                   }
                 }
               }
-            }
-          });
+            });
+          }
         }
-      }
-    }
-    else if (message.startsWith('ALL:')) {
-      final parts = message.split(':');
-      if (parts.length >= 2) {
-        final bool isOn = parts[1].trim() == '1';
-        if (mounted) {
-          setState(() {
-            if (parts.length >= 3 && parts[2].trim().isNotEmpty) {
-              final Set<int> targetIds = parts[2]
-                  .split(',')
-                  .map((e) => int.tryParse(e.trim()) ?? -1)
-                  .where((id) => id != -1)
-                  .toSet();
-              for (var id in targetIds) {
-                localLedStates[id] = isOn;
+      } else if (message.startsWith('ALL:')) {
+        final parts = message.split(':');
+        if (parts.length >= 2) {
+          final bool isOn = parts[1].trim() == '1';
+          if (mounted) {
+            setState(() {
+              if (parts.length >= 3 && parts[2].trim().isNotEmpty) {
+                final Set<int> targetIds = parts[2]
+                    .split(',')
+                    .map((e) => int.tryParse(e.trim()) ?? -1)
+                    .where((id) => id != -1)
+                    .toSet();
+                for (var id in targetIds) {
+                  _ledStates[id] = isOn; // 👈 Dùng duy nhất _ledStates
+                }
+              } else {
+                _ledStates.updateAll((key, value) => isOn);
               }
-            } else {
-              localLedStates.updateAll((key, value) => isOn);
-            }
-          });
+            });
+          }
+        }
+      } else if (message.startsWith('{')) {
+        try {
+          final Map<String, dynamic> msgJson = jsonDecode(message);
+          if (msgJson.containsKey('status') && msgJson.containsKey('device')) {
+            return;
+          }
+          if (msgJson.containsKey('d') ||
+              msgJson.containsKey('buildings') ||
+              msgJson.containsKey('ui_config')) {
+            _dynamicUiConfig = msgJson['ui_config'] ?? {};
+            _parseConfigMap(msgJson);
+          } else {
+            _parseFlatJson(message, isFromCache: false);
+          }
+        } catch (e) {
+          debugPrint("Lỗi parse JSON WebSocket: $e");
+        }
+      } else if (message.contains(':') && !message.startsWith('OTA_')) {
+        final parts = message.split(':');
+        if (parts.length == 2) {
+          final int? hwIndex = int.tryParse(parts[0].trim());
+          final bool isOn = parts[1].trim() == '1';
+          if (hwIndex != null && mounted) {
+            setState(() {
+              _ledStates[hwIndex] = isOn; // 👈 Dùng duy nhất _ledStates
+            });
+          }
+        }
+      } else if (message == 'OTA_SUCCESS') {
+        if (mounted) {
+          Navigator.of(context, rootNavigator: true).pop();
+          _showOTASuccessDialog();
+        }
+      } else if (message.startsWith('OTA_ERROR:')) {
+        String errType = message.substring(10).trim();
+        if (mounted) {
+          _handleOTAErrorFromHardware(errType);
         }
       }
-    }
-    else if (message.startsWith('{')) {
-      try {
-        final Map<String, dynamic> msgJson = jsonDecode(message);
-        if (msgJson.containsKey('status') && msgJson.containsKey('device')) {
-          debugPrint("Bỏ qua tin nhắn hệ thống chào hỏi: $message");
-          return;
-        }
-        if (msgJson.containsKey('d') || msgJson.containsKey('buildings') || msgJson.containsKey('ui_config')) {
-          _dynamicUiConfig = msgJson['ui_config'] ?? {};
-          _parseConfigMap(msgJson);
-        } else {
-          _parseFlatJson(message, isFromCache: false);
-        }
-      } catch (e) {
-        debugPrint("Lỗi parse JSON WebSocket: $e");
-      }
-    } 
-    else if (message.contains(':') && !message.startsWith('OTA_')) {
-      final parts = message.split(':');
-      if (parts.length == 2) {
-        final int? hwIndex = int.tryParse(parts[0].trim());
-        final bool isOn = parts[1].trim() == '1';
-        if (hwIndex != null && mounted) {
-          setState(() {
-            localLedStates[hwIndex] = isOn;
-          });
-        }
-      }
-    }
-    else if (message == 'OTA_SUCCESS') {
-      if (mounted) {
-        Navigator.of(context, rootNavigator: true).pop();
-        _showOTASuccessDialog();
-      }
-    } else if (message.startsWith('OTA_ERROR:')) {
-      String errType = message.substring(10).trim();
-      if (mounted) {
-        _handleOTAErrorFromHardware(errType);
-      }
-    }
-  },
-  onError: (_) {
-    if (!mounted) return;
-    _handleDisconnection();
-  },
-  onDone: () {
-    if (!mounted) return;
-    _handleDisconnection();
-  },
-);
+    },
+    onError: (_) {
+      if (!mounted) return;
+      _handleDisconnection();
+    },
+    onDone: () {
+      if (!mounted) return;
+      _handleDisconnection();
+    },
+  );
+  } catch (e) {
+    debugPrint("⚠️ WebSocket Stream đã được nghe từ trước: $e");
+  }
 }
+
+// 🟢 QUAN TRỌNG: Thêm hàm dispose để hủy StreamSubscription khi thoát màn hình
+@override
+void dispose() {
+  _wsSubscription?.cancel();
+    _otaWatchdogTimer?.cancel();
+  super.dispose();
+}
+//   @override
+// void dispose() {
+//   _otaWatchdogTimer?.cancel();
+//   super.dispose();
+// }
 Future<void> _loadBackupConfigAndParse() async {
   try {
     final response = await http.get(Uri.parse('https://saban-demo.onrender.com/config')).timeout(const Duration(seconds: 3));
@@ -301,22 +472,47 @@ Future<void> _loadBackupConfigAndParse() async {
       debugPrint('Lỗi gửi lệnh mô-tơ: $e');
     }
   }
-  void _parseSyncAll11(String message) {
+//   void _parseSyncAll11(String message) {
+//   try {
+//     debugPrint("📥 [WS RECV SYNCALL11]: $message"); // 👈 Log tin nhắn SYNCALL11 nhận từ Server
+//     String payload = message.substring(10);
+//     List<String> parts = payload.split('|');
+//     if (parts.isEmpty) return;
+//     List<String> states = parts[0].split(',');
+//     if (mounted) {
+//       setState(() {
+//         for (int i = 0; i < states.length && i < _ledStates.length; i++) {
+//           _ledStates[i] = (states[i] == '1'); // 👈 Sử dụng thống nhất _ledStates
+//         }
+//       });
+//     }
+//   } catch (e) {
+//     debugPrint("Lỗi Parse SYNCALL11: $e");
+//   }
+// }
+void _parseSyncAll11(String message) {
   try {
-    debugPrint("📥 [WS RECV SYNCALL11]: $message"); // 👈 Log tin nhắn SYNCALL11 nhận từ Server
-    String payload = message.substring(10);
-    List<String> parts = payload.split('|');
-    if (parts.isEmpty) return;
-    List<String> states = parts[0].split(',');
+    debugPrint("📥 [WS RECV SYNCALL11]: $message");
+
+    // 🟢 1. Tìm vị trí dấu gạch đứng '|' để lấy chính xác mảng dữ liệu phía sau
+    int pipeIndex = message.indexOf('|');
+    if (pipeIndex == -1) return;
+
+    // Lấy chuỗi chứa trạng thái các LED (ví dụ: "1,1,1,1,1...")
+    String statesData = message.substring(pipeIndex + 1).trim();
+    List<String> states = statesData.split(',');
+
     if (mounted) {
       setState(() {
-        for (int i = 0; i < states.length && i < _ledStates.length; i++) {
-          _ledStates[i] = (states[i] == '1'); // 👈 Sử dụng thống nhất _ledStates
+        // 🟢 2. Parse từng trạng thái vào _ledStates
+        for (int i = 0; i < states.length; i++) {
+          _ledStates[i] = (states[i].trim() == '1');
         }
       });
+      debugPrint("✅ [SYNC ALL SUCCESS]: Đã cập nhật ${_ledStates.length} trạng thái LED");
     }
   } catch (e) {
-    debugPrint("Lỗi Parse SYNCALL11: $e");
+    debugPrint("❌ [SYNC ALL ERROR]: Lỗi Parse SYNCALL11: $e");
   }
 }
 Future<void> _parseConfigMap(Map<String, dynamic> raw) async {
@@ -1295,7 +1491,8 @@ Future<void> _refreshDataFromCloud() async {
         debugPrint('🖼️ [REFRESH] Đang xóa ImageCache Flutter...');
         debugPrint('⚙️ [REFRESH] Đang parse lại Config Map sang UI...');
         setState(() {
-          localLedStates.clear(); // Clear trạng thái LED cũ
+          // localLedStates.clear(); // Clear trạng thái LED cũ
+          _ledStates.clear();
           _dynamicUiConfig = newData['ui_config'] ?? {}; // Cập nhật ngay layout nút bấm & position mới
           _parseConfigMap(newData); // Parse lại danh sách phòng, tòa nhà
         });
@@ -1338,30 +1535,135 @@ Future<void> _refreshDataFromCloud() async {
       debugPrint('🏁 [REFRESH] Hoàn thành hàm _refreshDataFromCloud()');
     }
   }
-  void _toggleLedList(List<int> ledIndices, bool targetState) {
+//   void _toggleLedList(List<int> ledIndices, bool targetState) {
+//   if (ledIndices.isEmpty) return;
+//   debugPrint("🔘 [USER CLICK TOGGLE]: Đang đổi trạng thái ${ledIndices.length} đèn -> TargetState: $targetState");
+//   setState(() {
+//     _activeEffect = 'MANUAL';
+//     for (int ledIdx in ledIndices) {
+//       _ledStates[ledIdx] = targetState; // 👈 Sử dụng thống nhất _ledStates
+//     }
+//   });
+//   if (ledIndices.length == 1) {
+//     widget.channel.sink.add('${ledIndices.first}:${targetState ? 1 : 0}');
+//   } else {
+//     String idsJoined = ledIndices.join(',');
+//     String payload = 'ALL:${targetState ? 1 : 0}:$idsJoined';
+//     widget.channel.sink.add(payload);
+//   }
+// }
+// void _toggleLedList(List<int> ledIndices, [bool? explicitState]) {
+//   if (ledIndices.isEmpty) return;
+
+//   // 🟢 TÍNH TARGET STATE ĐỘNG:
+//   // Kiểm tra xem tất cả các LED trong danh sách truyền vào đã BẬT chưa
+//   bool targetState;
+//   if (explicitState != null) {
+//     targetState = explicitState;
+//   } else {
+//     bool areAllOn = ledIndices.every((idx) => _ledStates[idx] == true);
+//     targetState = !areAllOn;
+//   }
+
+//   debugPrint("🔘 [USER CLICK TOGGLE]: Đang đổi trạng thái ${ledIndices.length} đèn -> TargetState: $targetState");
+
+//   setState(() {
+//     _activeEffect = 'MANUAL';
+//     for (int ledIdx in ledIndices) {
+//       _ledStates[ledIdx] = targetState;
+//     }
+//   });
+
+//   if (ledIndices.length == 1) {
+//     widget.channel.sink.add('${ledIndices.first}:${targetState ? 1 : 0}');
+//   } else {
+//     String idsJoined = ledIndices.join(',');
+//     String payload = 'ALL:${targetState ? 1 : 0}:$idsJoined';
+//     widget.channel.sink.add(payload);
+//   }
+// }
+// void _toggleLedList(List<int> ledIndices, [bool? explicitState]) {
+//   if (ledIndices.isEmpty) return;
+
+//   bool targetState;
+//   if (explicitState != null) {
+//     targetState = explicitState;
+//   } else {
+//     bool areAllOn = ledIndices.every((idx) => _ledStates[idx] == true);
+//     targetState = !areAllOn;
+//   }
+
+//   debugPrint("🔘 [USER CLICK TOGGLE]: ${ledIndices.length} LEDs -> TargetState: $targetState");
+
+//   setState(() {
+//     _activeEffect = 'MANUAL';
+//     for (int ledIdx in ledIndices) {
+//       _ledStates[ledIdx] = targetState;
+//     }
+//   });
+
+//   String val = targetState ? '1' : '0';
+
+//   if (ledIndices.length == 1) {
+//     // 1 LED đơn lẻ
+//     _sendWsCommand('${ledIndices.first}:$val');
+//   } else {
+//     // 🟢 TRUYỀN ĐẦY ĐỦ DANH SÁCH ID LED (Bao gồm cả 345 LED của Nút Tổng)
+//     // Giúp ESP32 parse chính xác 100% danh sách LED cần bật/tắt
+//     String idsJoined = ledIndices.join(',');
+//     _sendWsCommand('ALL:$val:$idsJoined');
+//   }
+// }
+void _toggleLedList(List<int> ledIndices, [bool? explicitState]) {
   if (ledIndices.isEmpty) return;
-  debugPrint("🔘 [USER CLICK TOGGLE]: Đang đổi trạng thái ${ledIndices.length} đèn -> TargetState: $targetState");
+
+  bool targetState;
+  if (explicitState != null) {
+    targetState = explicitState;
+  } else {
+    bool areAllOn = ledIndices.every((idx) => _ledStates[idx] == true);
+    targetState = !areAllOn;
+  }
+
+  debugPrint("🔘 [USER CLICK TOGGLE]: ${ledIndices.length} LEDs -> TargetState: $targetState");
+
   setState(() {
-    _activeEffect = 'MANUAL';
+    _activeEffect = 'MANUAL'; // 🟢 1. Cập nhật UI App về MANUAL
     for (int ledIdx in ledIndices) {
-      _ledStates[ledIdx] = targetState; // 👈 Sử dụng thống nhất _ledStates
+      _ledStates[ledIdx] = targetState;
     }
   });
+
+  // 🟢 2. ÉP ESP32 DỪNG NGAY HIỆU ỨNG (Chuyển cứng về MANUAL)
+  _sendWsCommand('MODE:MANUAL');
+
+  String val = targetState ? '1' : '0';
+
   if (ledIndices.length == 1) {
-    widget.channel.sink.add('${ledIndices.first}:${targetState ? 1 : 0}');
+    _sendWsCommand('${ledIndices.first}:$val');
   } else {
     String idsJoined = ledIndices.join(',');
-    String payload = 'ALL:${targetState ? 1 : 0}:$idsJoined';
-    widget.channel.sink.add(payload);
+    _sendWsCommand('ALL:$val:$idsJoined');
   }
 }
-  void _sendWsCommand(String cmd) {
-    try {
-      widget.channel.sink.add(cmd);
-    } catch (e) {
-      debugPrint("Lỗi gửi WS: $e");
-    }
+  // void _sendWsCommand(String cmd) {
+  //   try {
+  //     widget.channel.sink.add(cmd);
+  //   } catch (e) {
+  //     debugPrint("Lỗi gửi WS: $e");
+  //   }
+  // }
+  // 🟢 Getter trả về WebSocket Channel đang hoạt động
+WebSocketChannel get _activeChannel => _channel ?? widget.channel;
+
+void _sendWsCommand(String cmd) {
+  try {
+    _activeChannel.sink.add(cmd);
+    debugPrint("📤 [WS SENT SUCCESS]: $cmd");
+  } catch (e) {
+    debugPrint("❌ [WS SENT ERROR]: $e");
   }
+}
   Widget buildOverviewImage(String imagePath) {
   debugPrint("🖼️ [DEBUG UI] Đang render ảnh với path: '$imagePath'");
   if (imagePath.isEmpty) {
@@ -1607,53 +1909,107 @@ try {
                       ),
                     ],
                   ),
+                  // const Divider(height: 12),
+                  // ..._enabledEffects.map((eff) {
+                  //   String cmd = eff['cmd'];
+                  //   String title = eff['name'];
+                  //   IconData icon = eff['icon'];
+                  //   double val = 60;
+                  //   double min = 20;
+                  //   double max = 200;
+                  //   String unit = 'ms';
+                  //   if (cmd == 'TOGGLE_EVEN_ODD') {
+                  //     val = _evenOddSpeed; min = 1; max = 10; unit = 'giây';
+                  //   } else if (cmd == 'TOGGLE_METEOR') {
+                  //     val = _meteorSpeed; min = 50; max = 500; unit = 'ms';
+                  //   } else if (cmd == 'TOGGLE_BREATHING') {
+                  //     val = _breathSpeed; min = 20; max = 200; unit = 'ms';
+                  //   } else if (cmd == 'TOGGLE_SPARKLE') {
+                  //     val = _sparkleSpeed; min = 100; max = 1000; unit = 'ms';
+                  //   } else if (cmd == 'TOGGLE_SINEWAVE') {
+                  //     val = _sineSpeed; min = 20; max = 200; unit = 'ms';
+                  //   }
+                  //   return _buildCompactEffectRow(
+                  //     title: title,
+                  //     cmd: cmd,
+                  //     icon: icon,
+                  //     value: val,
+                  //     min: min,
+                  //     max: max,
+                  //     unit: unit,
+                  //     setModalState: setModalState,
+                  //     onChanged: (newVal) {
+                  //       setModalState(() {
+                  //         if (cmd == 'TOGGLE_EVEN_ODD') _evenOddSpeed = newVal;
+                  //         if (cmd == 'TOGGLE_METEOR') _meteorSpeed = newVal;
+                  //         if (cmd == 'TOGGLE_BREATHING') _breathSpeed = newVal;
+                  //         if (cmd == 'TOGGLE_SPARKLE') _sparkleSpeed = newVal;
+                  //         if (cmd == 'TOGGLE_SINEWAVE') _sineSpeed = newVal;
+                  //       });
+                  //       setState(() {});
+                  //       String speedCmd = 'SPEED_BREATHING:${newVal.toInt()}';
+                  //       if (cmd == 'TOGGLE_EVEN_ODD') speedCmd = 'SPEED_EVEN_ODD:${(newVal * 1000).toInt()}';
+                  //       if (cmd == 'TOGGLE_METEOR') speedCmd = 'SPEED_METEOR:${newVal.toInt()}';
+                  //       if (cmd == 'TOGGLE_SPARKLE') speedCmd = 'SPEED_SPARKLE:${newVal.toInt()}';
+                  //       if (cmd == 'TOGGLE_SINEWAVE') speedCmd = 'SPEED_SINEWAVE:${newVal.toInt()}';
+                  //       _sendWsCommand(speedCmd);
+                  //     },
+                  //   );
+                  // }),
                   const Divider(height: 12),
-                  ..._enabledEffects.map((eff) {
-                    String cmd = eff['cmd'];
-                    String title = eff['name'];
-                    IconData icon = eff['icon'];
-                    double val = 60;
-                    double min = 20;
-                    double max = 200;
-                    String unit = 'ms';
-                    if (cmd == 'TOGGLE_EVEN_ODD') {
-                      val = _evenOddSpeed; min = 1; max = 10; unit = 'giây';
-                    } else if (cmd == 'TOGGLE_METEOR') {
-                      val = _meteorSpeed; min = 50; max = 500; unit = 'ms';
-                    } else if (cmd == 'TOGGLE_BREATHING') {
-                      val = _breathSpeed; min = 20; max = 200; unit = 'ms';
-                    } else if (cmd == 'TOGGLE_SPARKLE') {
-                      val = _sparkleSpeed; min = 100; max = 1000; unit = 'ms';
-                    } else if (cmd == 'TOGGLE_SINEWAVE') {
-                      val = _sineSpeed; min = 20; max = 200; unit = 'ms';
-                    }
-                    return _buildCompactEffectRow(
-                      title: title,
-                      cmd: cmd,
-                      icon: icon,
-                      value: val,
-                      min: min,
-                      max: max,
-                      unit: unit,
-                      setModalState: setModalState,
-                      onChanged: (newVal) {
-                        setModalState(() {
-                          if (cmd == 'TOGGLE_EVEN_ODD') _evenOddSpeed = newVal;
-                          if (cmd == 'TOGGLE_METEOR') _meteorSpeed = newVal;
-                          if (cmd == 'TOGGLE_BREATHING') _breathSpeed = newVal;
-                          if (cmd == 'TOGGLE_SPARKLE') _sparkleSpeed = newVal;
-                          if (cmd == 'TOGGLE_SINEWAVE') _sineSpeed = newVal;
-                        });
-                        setState(() {});
-                        String speedCmd = 'SPEED_BREATHING:${newVal.toInt()}';
-                        if (cmd == 'TOGGLE_EVEN_ODD') speedCmd = 'SPEED_EVEN_ODD:${(newVal * 1000).toInt()}';
-                        if (cmd == 'TOGGLE_METEOR') speedCmd = 'SPEED_METEOR:${newVal.toInt()}';
-                        if (cmd == 'TOGGLE_SPARKLE') speedCmd = 'SPEED_SPARKLE:${newVal.toInt()}';
-                        if (cmd == 'TOGGLE_SINEWAVE') speedCmd = 'SPEED_SINEWAVE:${newVal.toInt()}';
-                        _sendWsCommand(speedCmd);
-                      },
-                    );
-                  }),
+..._enabledEffects.map((eff) {
+  String cmd = eff['cmd'];
+  String title = eff['name'];
+  IconData icon = eff['icon'];
+  double val = 60;
+  double min = 20;
+  double max = 200;
+  String unit = 'ms';
+
+  if (cmd == 'TOGGLE_EVEN_ODD') {
+    val = _evenOddSpeed; min = 1; max = 10; unit = 'giây';
+  } else if (cmd == 'TOGGLE_METEOR') {
+    val = _meteorSpeed; min = 50; max = 500; unit = 'ms';
+  } else if (cmd == 'TOGGLE_BREATHING') {
+    val = _breathSpeed; min = 20; max = 200; unit = 'ms';
+  } else if (cmd == 'TOGGLE_SPARKLE') {
+    val = _sparkleSpeed; min = 100; max = 1000; unit = 'ms';
+  } else if (cmd == 'TOGGLE_SINEWAVE') {
+    val = _sineSpeed; min = 20; max = 200; unit = 'ms';
+  }
+
+  return _buildCompactEffectRow(
+    title: title,
+    cmd: cmd,
+    icon: icon,
+    value: val,
+    min: min,
+    max: max,
+    unit: unit,
+    setModalState: setModalState,
+    // 🟢 1. ONCHANGED: Chỉ cập nhật biến local để kéo Slider mượt ( KHÔNG GỬI WS )
+    onChanged: (newVal) {
+      setModalState(() {
+        if (cmd == 'TOGGLE_EVEN_ODD') _evenOddSpeed = newVal;
+        if (cmd == 'TOGGLE_METEOR') _meteorSpeed = newVal;
+        if (cmd == 'TOGGLE_BREATHING') _breathSpeed = newVal;
+        if (cmd == 'TOGGLE_SPARKLE') _sparkleSpeed = newVal;
+        if (cmd == 'TOGGLE_SINEWAVE') _sineSpeed = newVal;
+      });
+      setState(() {});
+    },
+    // 🟢 2. ONCHANGEEND: Chỉ gửi 1 lệnh duy nhất sang ESP32 khi THẢ TAY
+    onChangeEnd: (finalVal) {
+      String speedCmd = 'SPEED_BREATHING:${finalVal.toInt()}';
+      if (cmd == 'TOGGLE_EVEN_ODD') speedCmd = 'SPEED_EVEN_ODD:${(finalVal * 1000).toInt()}';
+      if (cmd == 'TOGGLE_METEOR') speedCmd = 'SPEED_METEOR:${finalVal.toInt()}';
+      if (cmd == 'TOGGLE_SPARKLE') speedCmd = 'SPEED_SPARKLE:${finalVal.toInt()}';
+      if (cmd == 'TOGGLE_SINEWAVE') speedCmd = 'SPEED_SINEWAVE:${finalVal.toInt()}';
+      
+      _sendWsCommand(speedCmd); // 🚀 Bắn lệnh chốt
+    },
+  );
+}),
                   const SizedBox(height: 8),
                 ],
               ),
@@ -1676,6 +2032,7 @@ try {
     required String unit,
     required StateSetter setModalState,
     required ValueChanged<double> onChanged,
+    ValueChanged<double>? onChangeEnd, // 🟢 Bổ sung callback này
   }) {
     bool isActive = _activeEffect == cmd;
     return Container(
@@ -1694,15 +2051,36 @@ try {
           Row(
             children: [
               InkWell(
+                // onTap: () {
+                //   setModalState(() {
+                //     _activeEffect = isActive ? 'MANUAL' : cmd;
+                //   });
+                //   setState(() {
+                //     _activeEffect = isActive ? 'MANUAL' : cmd;
+                //   });
+                //   _sendWsCommand(cmd);
+                // },
                 onTap: () {
-                  setModalState(() {
-                    _activeEffect = isActive ? 'MANUAL' : cmd;
-                  });
-                  setState(() {
-                    _activeEffect = isActive ? 'MANUAL' : cmd;
-                  });
-                  _sendWsCommand(cmd);
-                },
+  // Xác định hiệu ứng mục tiêu
+  String targetEffect = isActive ? 'MANUAL' : cmd;
+
+  // 1. Cập nhật State cho cả Dialog (setModalState) và Màn hình chính (setState)
+  setModalState(() {
+    _activeEffect = targetEffect;
+  });
+  setState(() {
+    _activeEffect = targetEffect;
+  });
+
+  // 2. Gửi lệnh WebSocket chuẩn tiền tố MODE: sang ESP32
+  if (isActive) {
+    // Nếu hiệu ứng đang chạy -> Bấm vào để TẮT -> Bắn MODE:MANUAL
+    _sendWsCommand('MODE:MANUAL');
+  } else {
+    // Nếu chưa chạy -> Bấm vào để BẬT -> Bắn MODE:TOGGLE_EVEN_ODD (hoặc MODE:cmd tương ứng)
+    _sendWsCommand('MODE:$cmd');
+  }
+},
                 borderRadius: BorderRadius.circular(20),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
@@ -1786,6 +2164,7 @@ try {
                 min: min,
                 max: max,
                 onChanged: onChanged,
+                onChangeEnd: onChangeEnd, // 🟢 Gán callback vào Slider gốc
               ),
             ),
           ),
@@ -1802,34 +2181,100 @@ try {
   }
   return true; // Tất cả LED trong nhóm đều đang BẬT
 }
-  List<int> _getAllSabanLeds({int? filterType}) {
-  List<int> allLeds = [];
-  for (var b in _buildings) {
-    for (var f in b['floors']) {
-      List<dynamic> rooms = f['rooms'] ?? [];
-      if (filterType == null) {
-        allLeds.addAll(_extractLeds(rooms));
-      } 
-      else if (filterType == 0) {
-        var apartmentRooms = rooms.where((r) {
-          int rType = int.tryParse(r['room_type'].toString()) ?? 0;
-          return rType < 100;
-        }).toList();
-        allLeds.addAll(_extractLeds(apartmentRooms));
-      } 
-      else if (filterType == 1000) {
-        var utilityRooms = rooms.where((r) {
-          int rType = int.tryParse(r['room_type'].toString()) ?? 0;
-          return rType >= 100;
-        }).toList();
-        allLeds.addAll(_extractLeds(utilityRooms));
-      } 
-      else {
-        allLeds.addAll(_extractLeds(rooms, filterRoomType: filterType));
+//   List<int> _getAllSabanLeds({int? filterType}) {
+//   List<int> allLeds = [];
+//   for (var b in _buildings) {
+//     for (var f in b['floors']) {
+//       List<dynamic> rooms = f['rooms'] ?? [];
+//       if (filterType == null) {
+//         allLeds.addAll(_extractLeds(rooms));
+//       } 
+//       else if (filterType == 0) {
+//         var apartmentRooms = rooms.where((r) {
+//           int rType = int.tryParse(r['room_type'].toString()) ?? 0;
+//           return rType < 100;
+//         }).toList();
+//         allLeds.addAll(_extractLeds(apartmentRooms));
+//       } 
+//       else if (filterType == 1000) {
+//         var utilityRooms = rooms.where((r) {
+//           int rType = int.tryParse(r['room_type'].toString()) ?? 0;
+//           return rType >= 100;
+//         }).toList();
+//         allLeds.addAll(_extractLeds(utilityRooms));
+//       } 
+//       else {
+//         allLeds.addAll(_extractLeds(rooms, filterRoomType: filterType));
+//       }
+//     }
+//   }
+//   return allLeds;
+// }
+List<int> _getAllSabanLeds({int? filterType}) {
+  Set<int> uniqueLeds = {};
+
+  // 🟢 CÁCH 1: TRÍCH XUẤT TỪ CÂY _buildings (NẾU ĐÃ PARSE RA DẠNG CẤU TRÚC)
+  if (_buildings.isNotEmpty) {
+    for (var b in _buildings) {
+      List<dynamic> floors = b['floors'] ?? [];
+      for (var f in floors) {
+        List<dynamic> rooms = f['rooms'] ?? [];
+
+        if (filterType == null) {
+          // Lấy TẤT CẢ LED
+          uniqueLeds.addAll(_extractLeds(rooms));
+        } else if (filterType == 0) {
+          // Lấy TẤT CẢ CĂN HỘ (filter_type từ 2 đến 6, nhỏ hơn 100)
+          var apartmentRooms = rooms.where((r) {
+            int rType = int.tryParse(r['room_type'].toString()) ?? 0;
+            return rType > 0 && rType < 100;
+          }).toList();
+          uniqueLeds.addAll(_extractLeds(apartmentRooms));
+        } else if (filterType == 1000) {
+          // Lấy TẤT CẢ THƯƠNG MẠI & TIỆN ÍCH (filter_type >= 100)
+          var utilityRooms = rooms.where((r) {
+            int rType = int.tryParse(r['room_type'].toString()) ?? 0;
+            return rType >= 100;
+          }).toList();
+          uniqueLeds.addAll(_extractLeds(utilityRooms));
+        } else {
+          // Lọc theo filterType cụ thể (ví dụ: 2, 3, 100, 201...)
+          uniqueLeds.addAll(_extractLeds(rooms, filterRoomType: filterType));
+        }
       }
     }
   }
-  return allLeds;
+
+  // 🟢 CÁCH 2: FALLBACK TRUY CẤP TRỰC TIẾP MẢNG 'd' TRONG JSON NẾU CÂY _buildings RỖNG
+  // 🟢 Sử dụng ?. và ?? để tránh lỗi Null Safety với widget.configData
+  final rawConfig = widget.configData;
+  if (uniqueLeds.isEmpty && rawConfig != null && rawConfig.containsKey('d')) {
+    final rawD = rawConfig['d'] as List<dynamic>? ?? [];
+    for (var item in rawD) {
+      if (item is List && item.length >= 5) {
+        int rType = int.tryParse(item[3].toString()) ?? 0;
+        int ledIndex = int.tryParse(item[4].toString()) ?? -1;
+
+        if (ledIndex != -1) {
+          if (filterType == null) {
+            uniqueLeds.add(ledIndex);
+          } else if (filterType == 0 && rType > 0 && rType < 100) {
+            uniqueLeds.add(ledIndex);
+          } else if (filterType == 1000 && rType >= 100) {
+            uniqueLeds.add(ledIndex);
+          } else if (filterType == rType) {
+            uniqueLeds.add(ledIndex);
+          }
+        }
+      }
+    }
+  }
+
+  // Chuyển Set về List và sắp xếp theo thứ tự tăng dần
+  List<int> sortedLeds = uniqueLeds.toList()..sort();
+  debugPrint("🔍 [GET LEDS]: filterType = $filterType -> Tìm thấy ${sortedLeds.length} LED");
+
+  return sortedLeds;
 }
 Widget _buildDynamicControlPanel(
   BuildContext context,
@@ -1878,61 +2323,236 @@ Widget _buildDynamicControlPanel(
       mainAxisSize: MainAxisSize.min,
       children: [
         Center(
-          child: InkWell(
-            onTap: () => _toggleLedList(allSabanLeds, !isMasterOn),
-            onDoubleTap: () {
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (context) => BuildingsListScreen(
-        buildings: _buildings,
-        ledStates: localLedStates, // Dùng biến localLedStates đang lưu trạng thái LED
-        onToggleLeds: _toggleLedList,
-        isAnyLedOn: _areAllLedsOn,
-        extractLeds: _extractLeds,
-        selectedFilterType: 0,
+//           child: InkWell(
+//             onTap: () => _toggleLedList(allSabanLeds, !isMasterOn),
+//             onDoubleTap: () {
+//   Navigator.push(
+//     context,
+//     MaterialPageRoute(
+//       builder: (context) => BuildingsListScreen(
+//         buildings: _buildings,
+//         ledStates: localLedStates, // Dùng biến localLedStates đang lưu trạng thái LED
+//         onToggleLeds: _toggleLedList,
+//         isAnyLedOn: _areAllLedsOn,
+//         extractLeds: _extractLeds,
+//         selectedFilterType: 0,
+//       ),
+//     ),
+//   );
+// },
+//             borderRadius: BorderRadius.circular(10),
+//             child: AnimatedContainer(
+//               duration: const Duration(milliseconds: 200),
+//               padding: EdgeInsets.symmetric(
+//                 vertical: isPhone ? 6 : 8,
+//                 horizontal: isPhone ? 20 : 36,
+//               ),
+//               decoration: BoxDecoration(
+//                 gradient: isMasterOn
+//                     ? const LinearGradient(colors: [Color(0xFFFF9800), Color(0xFFF57C00)])
+//                     : const LinearGradient(colors: [Color(0xFFE0F2FE), Color(0xFFBAE6FD)]),
+//                 borderRadius: BorderRadius.circular(10),
+//                 border: Border.all(
+//                   color: isMasterOn ? Colors.amberAccent : const Color(0xFF0284C7),
+//                   width: 1.0,
+//                 ),
+//               ),
+//               child: Row(
+//                 mainAxisSize: MainAxisSize.min,
+//                 children: [
+//                   Icon(
+//                     isMasterOn ? Icons.lightbulb : Icons.lightbulb_outline,
+//                     size: isPhone ? 15 : 17,
+//                     color: isMasterOn ? Colors.white : const Color(0xFF0369A1),
+//                   ),
+//                   const SizedBox(width: 6),
+//                   Text(
+//                     'TỔNG SA BÀN (${isMasterOn ? "BẬT" : "TẮT"})',
+//                     style: TextStyle(
+//                       fontSize: isPhone ? 11.5 : 13.0,
+//                       fontWeight: FontWeight.bold,
+//                       color: isMasterOn ? Colors.white : const Color(0xFF0369A1),
+//                     ),
+//                   ),
+//                 ],
+//               ),
+//             ),
+//           ),
+// child: InkWell(
+//   // 🟢 Gọi trực tiếp hàm toggle với mảng 345 LED, để hàm tự đảo trạng thái chuẩn
+//   onTap: () => _toggleLedList(allSabanLeds),
+//   onDoubleTap: () {
+//     Navigator.push(
+//       context,
+//       MaterialPageRoute(
+//         builder: (context) => BuildingsListScreen(
+//           buildings: _buildings,
+//           ledStates: localLedStates,
+//           onToggleLeds: _toggleLedList,
+//           isAnyLedOn: _areAllLedsOn,
+//           extractLeds: _extractLeds,
+//           selectedFilterType: 0,
+//         ),
+//       ),
+//     );
+//   },
+//   borderRadius: BorderRadius.circular(10),
+//   child: AnimatedContainer(
+//     duration: const Duration(milliseconds: 200),
+//     padding: EdgeInsets.symmetric(
+//       vertical: isPhone ? 6 : 8,
+//       horizontal: isPhone ? 20 : 36,
+//     ),
+//     decoration: BoxDecoration(
+//       gradient: isMasterOn
+//           ? const LinearGradient(colors: [Color(0xFFFF9800), Color(0xFFF57C00)])
+//           : const LinearGradient(colors: [Color(0xFFE0F2FE), Color(0xFFBAE6FD)]),
+//       borderRadius: BorderRadius.circular(10),
+//       border: Border.all(
+//         color: isMasterOn ? Colors.amberAccent : const Color(0xFF0284C7),
+//         width: 1.0,
+//       ),
+//     ),
+//     child: Row(
+//       mainAxisSize: MainAxisSize.min,
+//       children: [
+//         Icon(
+//           isMasterOn ? Icons.lightbulb : Icons.lightbulb_outline,
+//           size: isPhone ? 15 : 17,
+//           color: isMasterOn ? Colors.white : const Color(0xFF0369A1),
+//         ),
+//         const SizedBox(width: 6),
+//         Text(
+//           'TỔNG SA BÀN (${isMasterOn ? "BẬT" : "TẮT"})',
+//           style: TextStyle(
+//             fontSize: isPhone ? 11.5 : 13.0,
+//             fontWeight: FontWeight.bold,
+//             color: isMasterOn ? Colors.white : const Color(0xFF0369A1),
+//           ),
+//         ),
+//       ],
+//     ),
+//   ),
+// ),
+// 🟢 3. Render Widget Nút bấm
+// child: InkWell(
+//   onTap: () {
+//     _toggleLedList(allSabanLeds); // Gửi lệnh bật/tắt toàn bộ
+//   },
+//   onDoubleTap: () {
+//     Navigator.push(
+//       context,
+//       MaterialPageRoute(
+//         builder: (context) => BuildingsListScreen(
+//           buildings: _buildings,
+//           ledStates: _ledStates,
+//           onToggleLeds: _toggleLedList,
+//           isAnyLedOn: _areAllLedsOn,
+//           extractLeds: _extractLeds,
+//           selectedFilterType: 0,
+//         ),
+//       ),
+//     );
+//   },
+//   borderRadius: BorderRadius.circular(10),
+//   child: AnimatedContainer(
+//     duration: const Duration(milliseconds: 200),
+//     padding: EdgeInsets.symmetric(
+//       vertical: isPhone ? 6 : 8,
+//       horizontal: isPhone ? 20 : 36,
+//     ),
+//     decoration: BoxDecoration(
+//       // 🟢 MÀU NỀN GRADIENT CẬP NHẬT THEO isMasterOn
+//       gradient: isMasterOn
+//           ? const LinearGradient(colors: [Color(0xFFFF9800), Color(0xFFF57C00)]) // Cam
+//           : const LinearGradient(colors: [Color(0xFFE0F2FE), Color(0xFFBAE6FD)]), // Xanh
+//       borderRadius: BorderRadius.circular(10),
+//       border: Border.all(
+//         color: isMasterOn ? Colors.amberAccent : const Color(0xFF0284C7),
+//         width: 1.0,
+//       ),
+//     ),
+//     child: Row(
+//       mainAxisSize: MainAxisSize.min,
+//       children: [
+//         Icon(
+//           isMasterOn ? Icons.lightbulb : Icons.lightbulb_outline,
+//           size: isPhone ? 15 : 17,
+//           color: isMasterOn ? Colors.white : const Color(0xFF0369A1),
+//         ),
+//         const SizedBox(width: 6),
+//         // 🟢 TIÊU ĐỀ TEXT CẬP NHẬT THEO isMasterOn
+//         Text(
+//           'TỔNG SA BÀN (${isMasterOn ? "BẬT" : "TẮT"})',
+//           style: TextStyle(
+//             fontSize: isPhone ? 11.5 : 13.0,
+//             fontWeight: FontWeight.bold,
+//             color: isMasterOn ? Colors.white : const Color(0xFF0369A1),
+//           ),
+//         ),
+//       ],
+//     ),
+//   ),
+// ),
+
+child: InkWell(
+  onTap: () {
+    // Nhấn vào nút Tổng vẫn thực hiện Smart Toggle (bật hết hoặc tắt hết)
+    _toggleLedList(allSabanLeds); 
+  },
+  onDoubleTap: () {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => BuildingsListScreen(
+          buildings: _buildings,
+          ledStates: _ledStates,
+          onToggleLeds: _toggleLedList,
+          isAnyLedOn: _areAllLedsOn,
+          extractLeds: _extractLeds,
+          selectedFilterType: 0,
+        ),
+      ),
+    );
+  },
+  borderRadius: BorderRadius.circular(10),
+  child: AnimatedContainer(
+    duration: const Duration(milliseconds: 200),
+    padding: EdgeInsets.symmetric(
+      vertical: isPhone ? 6 : 8,
+      horizontal: isPhone ? 20 : 36,
+    ),
+    decoration: BoxDecoration(
+      gradient: isMasterOn
+          ? const LinearGradient(colors: [Color(0xFFFF9800), Color(0xFFF57C00)]) // Cam (Chỉ sáng khi cả 345 LED cùng bật)
+          : const LinearGradient(colors: [Color(0xFFE0F2FE), Color(0xFFBAE6FD)]), // Xanh (Khi chưa bật hết)
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(
+        color: isMasterOn ? Colors.amberAccent : const Color(0xFF0284C7),
+        width: 1.0,
       ),
     ),
-  );
-},
-            borderRadius: BorderRadius.circular(10),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              padding: EdgeInsets.symmetric(
-                vertical: isPhone ? 6 : 8,
-                horizontal: isPhone ? 20 : 36,
-              ),
-              decoration: BoxDecoration(
-                gradient: isMasterOn
-                    ? const LinearGradient(colors: [Color(0xFFFF9800), Color(0xFFF57C00)])
-                    : const LinearGradient(colors: [Color(0xFFE0F2FE), Color(0xFFBAE6FD)]),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: isMasterOn ? Colors.amberAccent : const Color(0xFF0284C7),
-                  width: 1.0,
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    isMasterOn ? Icons.lightbulb : Icons.lightbulb_outline,
-                    size: isPhone ? 15 : 17,
-                    color: isMasterOn ? Colors.white : const Color(0xFF0369A1),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    'TỔNG SA BÀN (${isMasterOn ? "BẬT" : "TẮT"})',
-                    style: TextStyle(
-                      fontSize: isPhone ? 11.5 : 13.0,
-                      fontWeight: FontWeight.bold,
-                      color: isMasterOn ? Colors.white : const Color(0xFF0369A1),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          isMasterOn ? Icons.lightbulb : Icons.lightbulb_outline,
+          size: isPhone ? 15 : 17,
+          color: isMasterOn ? Colors.white : const Color(0xFF0369A1),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          'TỔNG SA BÀN (${isMasterOn ? "BẬT" : "TẮT"})',
+          style: TextStyle(
+            fontSize: isPhone ? 11.5 : 13.0,
+            fontWeight: FontWeight.bold,
+            color: isMasterOn ? Colors.white : const Color(0xFF0369A1),
           ),
+        ),
+      ],
+    ),
+  ),
+),
         ),
         SizedBox(height: isPhone ? 8 : 10),
         IntrinsicHeight(
@@ -2918,14 +3538,28 @@ Widget _buildScaleCard(String label, String value, IconData icon) {
 ),
                 PopupMenuItem(
                   value: 'download_ota',
-                  child: Row(
-                    children: [
-                      const Icon(Icons.download_for_offline_rounded, color: Color(0xFF0284C7), size: 20),
-                     const SizedBox(width: 10),
-                      // 1. Tải Firmware về Máy (.bin)
-Text(_isEn ? '1. Download Firmware (.bin)' : '1. Tải Firmware về Máy (.bin)')
-                    ],
-                  ),
+//                   child: Row(
+//                     children: [
+//                       const Icon(Icons.download_for_offline_rounded, color: Color(0xFF0284C7), size: 20),
+//                      const SizedBox(width: 10),
+//                       // 1. Tải Firmware về Máy (.bin)
+// Text(_isEn ? '1. Download Firmware (.bin)' : '1. Tải Firmware về Máy (.bin)')
+//                     ],
+//                   ),
+child: Row(
+  children: [
+    const Icon(Icons.download_for_offline_rounded, color: Color(0xFF0284C7), size: 20),
+    const SizedBox(width: 10),
+    // 🟢 1. Tải Firmware về Máy (.bin) - Bọc Expanded để chống văng tràn viền
+    Expanded(
+      child: Text(
+        _isEn ? '1. Download Firmware (.bin)' : '1. Tải Firmware về Máy (.bin)',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis, // Tự động thêm dấu ... nếu màn hình không đủ rộng
+      ),
+    ),
+  ],
+),
                 ),
                  PopupMenuItem(
                   value: 'upload_ota',
@@ -2933,9 +3567,13 @@ Text(_isEn ? '1. Download Firmware (.bin)' : '1. Tải Firmware về Máy (.bin)
                     children: [
                       const Icon(Icons.upload_file_rounded, color: Colors.green, size: 20),
                       const SizedBox(width: 10),
+                      Expanded(
                       // Text('2. Nạp File .bin Sang Sa Bàn'),
                       // 2. Nạp File .bin Sang Sa Bàn
-Text(_isEn ? '2. Upload .bin to Model' : '2. Nạp File .bin Sang Sa Bàn'),
+child: Text(_isEn ? '2. Upload .bin to Model' : '2. Nạp File .bin Sang Sa Bàn',
+maxLines: 1,
+        overflow: TextOverflow.ellipsis, // Tự động thêm dấu ... nếu màn hình không đủ rộng
+      ),),
                     ],
                   ),
                 ),
@@ -2959,7 +3597,12 @@ Text(_isEn ? 'Sync Cloud Data' : 'Đồng bộ dữ liệu Cloud'),
                      const SizedBox(width: 10),
                       // Text('Chỉnh sửa tên & ảnh sa bàn'),
                       // Chỉnh sửa tên & Ảnh sa bàn
-Text(_isEn ? 'Edit Name & Banner Image' : 'Chỉnh sửa tên & Ảnh sa bàn'),
+                      Expanded(
+child: Text(_isEn ? 'Edit Name & Banner Image' : 'Chỉnh sửa tên & Ảnh sa bàn',
+maxLines: 1,
+        overflow: TextOverflow.ellipsis, // Tự động thêm dấu ... nếu màn hình không đủ rộng
+      ),
+    ),
                     ],
                   ),
                 ),
@@ -3091,12 +3734,12 @@ Container(
       ),
     );
   }
-  @override
-void dispose() {
-  _otaWatchdogTimer?.cancel();
-  super.dispose();
-}
-  @override
+//   @override
+// void dispose() {
+//   _otaWatchdogTimer?.cancel();
+//   super.dispose();
+// }
+  // @override
 @override
 Widget build(BuildContext context) {
   // if (!_isLoaded) {
@@ -3146,8 +3789,32 @@ Widget build(BuildContext context) {
     ),
   );
 }
-  List<int> allSabanLeds = _getAllSabanLeds();
-  bool isMasterOn = _areAllLedsOn(allSabanLeds);
+  // List<int> allSabanLeds = _getAllSabanLeds();
+  // bool isMasterOn = _areAllLedsOn(allSabanLeds);
+//   List<int> allSabanLeds = _getAllSabanLeds();
+
+// // 🟢 ĐỔI TỪ _areAllLedsOn SANG KIỂM TRA "CÓ ÍT NHẤT 1 LED ĐANG BẬT"
+// bool isMasterOn = allSabanLeds.any((idx) => localLedStates[idx] == true);
+// 🟢 1. Lấy tất cả 345 ID LED hiện có
+// final List<int> allSabanLeds = _getAllSabanLeds(); 
+
+// // 🟢 2. CẬP NHẬT BIẾN NÀY: Chỉ cần có ÍT NHẤT 1 LED đang sáng -> Nút hiển thị là BẬT
+// final bool isMasterOn = allSabanLeds.any((idx) => _ledStates[idx] == true);
+// 🟢 Lấy toàn bộ 345 LED sa bàn
+final List<int> allSabanLeds = _getAllSabanLeds(); 
+
+// 🟢 NÚT TỔNG CHỈ BẬT KHI TẤT CẢ 345 LED ĐỀU ĐANG BẬT (345/345)
+final bool isMasterOn = allSabanLeds.isNotEmpty && 
+    allSabanLeds.every((idx) => _ledStates[idx] == true);
+    // 🟢 Nút TẤT CẢ CÁC PHÒNG (Bật khi đủ 305/305 LED căn hộ sáng)
+// final List<int> apartmentLeds = _getAllSabanLeds(filterType: 0);
+// final bool isAllApartmentsOn = apartmentLeds.isNotEmpty && 
+//     apartmentLeds.every((idx) => _ledStates[idx] == true);
+
+// 🟢 Nút THƯƠNG MẠI VÀ TIỆN ÍCH (Bật khi đủ 40/40 LED tiện ích sáng)
+// final List<int> utilityLeds = _getAllSabanLeds(filterType: 1000);
+// final bool isAllUtilitiesOn = utilityLeds.isNotEmpty && 
+//     utilityLeds.every((idx) => _ledStates[idx] == true);
 return Scaffold(
   body: Stack(
     fit: StackFit.expand,

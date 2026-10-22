@@ -13,6 +13,7 @@ import '../widgets/dynamic_image.dart'; // 🟢 Dùng DynamicImage widget đa n�
 import 'master_control_screen.dart';
 import '../services/firmware_service.dart';
 import 'dart:io'; // 👈 Thêm dòng này vào đầu file
+import 'package:web_socket_channel/io.dart';
 class ConnectScreen extends StatefulWidget {
   final String? autoConnectIp;
   const ConnectScreen({super.key, this.autoConnectIp});
@@ -28,6 +29,7 @@ String _appTitle = 'ĐIỀU KHIỂN SA BÀN THÔNG MINH';
 String _bgImagePath = 'assets/images/background.png';
   String? localDownloadedBinPath;
   bool _isOTAUploading = false;
+  IOWebSocketChannel? _channel;
   @override
   void initState() {
     super.initState();
@@ -44,7 +46,7 @@ Future<void> _loadSavedIp() async {
 
   // 🟢 Nếu chưa lưu IP HOẶC dữ liệu trong máy đang dính IP cũ '192.168.0.27'
   // thì ép buộc cập nhật sang tên miền mDNS mới
-  if (savedIp == null || savedIp == '192.168.0.27') {
+  if (savedIp == null || savedIp == '192.168.0.200') {
     savedIp = 'saban-dongvancong.local';
     await prefs.setString('saved_ip', savedIp); // Đè dữ liệu mới vào máy
   }
@@ -193,8 +195,168 @@ Future<void> _loadSavedLanguage() async {
     }
     return null;
   }
+// Future<void> _downloadFirmwareToPhone() async {
+//   if (!mounted) return;
+//   ScaffoldMessenger.of(context).showSnackBar(
+//     const SnackBar(
+//       content: Row(
+//         children: [
+//           SizedBox(
+//             width: 18,
+//             height: 18,
+//             child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+//           ),
+//           SizedBox(width: 12),
+//           Text('Đang kiểm tra link Firmware từ Cloud...'),
+//         ],
+//       ),
+//       duration: Duration(seconds: 2),
+//     ),
+//   );
+//   try {
+//     String binUrl = '';
+//     String? version; // 🟢 Để null mặc định thay vì gán cứng '1.0.2'
+//     try {
+//       final configData = await _loadRemoteConfigFast();
+//       final firmwareInfo = configData['firmware_info'];
+//       if (firmwareInfo != null && firmwareInfo['bin_url'] != null) {
+//         binUrl = firmwareInfo['bin_url'].toString().trim();
+//         if (firmwareInfo['version'] != null) {
+//           version = firmwareInfo['version'].toString().trim();
+//         }
+//       }
+//     } catch (_) {}
+//     if (binUrl.isEmpty) {
+//       final releaseInfo = await fetchLatestRelease();
+//       if (releaseInfo != null) {
+//         binUrl = releaseInfo['download_url']!;
+//         version = releaseInfo['version'];
+//       }
+//     }
+//     if (binUrl.isEmpty) {
+//       if (mounted) _showErrorSnackBar('Không tìm thấy link Firmware!');
+//       return;
+//     }
+//     if (!mounted) return;
+//     final displayVersion = version != null ? 'v$version' : 'Mới nhất (Latest)';
+//     final String storageNoticeText = Platform.isAndroid
+//         ? 'File .bin sẽ được tải về lưu trữ tại thư mục Download/bin_esp32 của điện thoại.'
+//         : 'File .bin sẽ được tải vào mục "Trên iPad của tôi" > Thư mục App > bin_esp32 (Mở ứng dụng Tệp để xem).';
+//     showDialog(
+//       context: context,
+//       builder: (dialogContext) {
+//         double downloadProgress = 0.0;
+//         bool isDownloading = false;
+//         StateSetter? setDialogState;
+//         return StatefulBuilder(
+//           builder: (context, setStateDialog) {
+//             setDialogState = setStateDialog;
+//             return AlertDialog(
+//               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+//               title: const Row(
+//                 children: [
+//                   Icon(Icons.download_for_offline_rounded, color: Color(0xFF0284C7)),
+//                   SizedBox(width: 10),
+//                   Text('Tải Firmware Về Máy', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+//                 ],
+//               ),
+//               content: Column(
+//                 mainAxisSize: MainAxisSize.min,
+//                 crossAxisAlignment: CrossAxisAlignment.start,
+//                 children: [
+//                   Text('• Phiên bản: $displayVersion', style: const TextStyle(fontWeight: FontWeight.bold)),
+//                   const SizedBox(height: 8),
+//                   if (isDownloading) ...[
+//                     LinearProgressIndicator(value: downloadProgress, color: const Color(0xFF0284C7)),
+//                     const SizedBox(height: 8),
+//                     Text('${(downloadProgress * 100).toInt()}% - Đang tải file .bin...'),
+//                   ] else ...[
+//                     Text(storageNoticeText),
+//                   ],
+//                 ],
+//               ),
+//               actions: [
+//                 if (!isDownloading) ...[
+//                   TextButton(
+//                     onPressed: () => Navigator.pop(dialogContext),
+//                     child: const Text('Hủy'),
+//                   ),
+//                   ElevatedButton.icon(
+//                     style: ElevatedButton.styleFrom(
+//                       backgroundColor: const Color(0xFF0284C7),
+//                       foregroundColor: Colors.white,
+//                     ),
+//                     icon: const Icon(Icons.download_rounded, size: 18),
+//                     label: const Text('Bắt Đầu Tải'),
+//                     onPressed: () async {
+//                       final messengerState = ScaffoldMessenger.of(context);
+//                       if (setDialogState != null) {
+//                         setDialogState!(() {
+//                           isDownloading = true;
+//                           downloadProgress = 0.1;
+//                         });
+//                       }
+//                       try {
+//                         final savedPath = await FirmwareService.downloadToBinFolder(
+//                           binUrl,
+//                           version: version, // Nếu null, FirmwareService sẽ tự lưu tên 'firmware_latest.bin'
+//                           onProgress: (received, total) {
+//                             if (total != -1 && setDialogState != null) {
+//                               setDialogState!(() {
+//                                 downloadProgress = received / total;
+//                               });
+//                             }
+//                           },
+//                         );
+//                         if (mounted) {
+//                           setState(() {
+//                             localDownloadedBinPath = savedPath;
+//                           });
+//                         }
+//                         if (setDialogState != null) {
+//                           setDialogState!(() {
+//                             downloadProgress = 1.0;
+//                           });
+//                         }
+//                         await Future.delayed(const Duration(milliseconds: 500));
+//                         if (dialogContext.mounted) {
+//                           Navigator.pop(dialogContext);
+//                         }
+//                         messengerState.showSnackBar(
+//                           SnackBar(
+//                             content: Text(
+//                               Platform.isAndroid
+//                                   ? 'Đã tải $displayVersion vào thư mục Download/bin_esp32!'
+//                                   : 'Đã tải $displayVersion vào ứng dụng Tệp (Trên iPad của tôi)!',
+//                             ),
+//                             backgroundColor: Colors.green,
+//                           ),
+//                         );
+//                       } catch (e) {
+//                         if (dialogContext.mounted) {
+//                           Navigator.pop(dialogContext);
+//                         }
+//                         if (mounted) {
+//                           _showErrorSnackBar('Tải file thất bại: $e');
+//                         }
+//                       }
+//                     },
+//                   ),
+//                 ],
+//               ],
+//             );
+//           },
+//         );
+//       },
+//     );
+//   } catch (e) {
+//     if (mounted) _showErrorSnackBar('Lỗi tải cấu hình: $e');
+//   }
+// }
+
 Future<void> _downloadFirmwareToPhone() async {
   if (!mounted) return;
+
   ScaffoldMessenger.of(context).showSnackBar(
     const SnackBar(
       content: Row(
@@ -211,9 +373,12 @@ Future<void> _downloadFirmwareToPhone() async {
       duration: Duration(seconds: 2),
     ),
   );
+
   try {
     String binUrl = '';
     String? version; // 🟢 Để null mặc định thay vì gán cứng '1.0.2'
+
+    // 1. Thử lấy thông tin từ Remote Config
     try {
       final configData = await _loadRemoteConfigFast();
       final firmwareInfo = configData['firmware_info'];
@@ -224,6 +389,8 @@ Future<void> _downloadFirmwareToPhone() async {
         }
       }
     } catch (_) {}
+
+    // 2. Nếu không có, thử lấy từ GitHub Release / API cập nhật
     if (binUrl.isEmpty) {
       final releaseInfo = await fetchLatestRelease();
       if (releaseInfo != null) {
@@ -231,21 +398,29 @@ Future<void> _downloadFirmwareToPhone() async {
         version = releaseInfo['version'];
       }
     }
+
     if (binUrl.isEmpty) {
       if (mounted) _showErrorSnackBar('Không tìm thấy link Firmware!');
       return;
     }
+
     if (!mounted) return;
+
+    // Chuỗi hiển thị phiên bản trên UI dialog
     final displayVersion = version != null ? 'v$version' : 'Mới nhất (Latest)';
+
+    // Chuẩn bị văn bản thông báo theo hệ điều hành
     final String storageNoticeText = Platform.isAndroid
         ? 'File .bin sẽ được tải về lưu trữ tại thư mục Download/bin_esp32 của điện thoại.'
         : 'File .bin sẽ được tải vào mục "Trên iPad của tôi" > Thư mục App > bin_esp32 (Mở ứng dụng Tệp để xem).';
+
     showDialog(
       context: context,
       builder: (dialogContext) {
         double downloadProgress = 0.0;
         bool isDownloading = false;
         StateSetter? setDialogState;
+
         return StatefulBuilder(
           builder: (context, setStateDialog) {
             setDialogState = setStateDialog;
@@ -295,6 +470,7 @@ Future<void> _downloadFirmwareToPhone() async {
                         });
                       }
                       try {
+                        // 🟢 Tải file .bin thông qua FirmwareService
                         final savedPath = await FirmwareService.downloadToBinFolder(
                           binUrl,
                           version: version, // Nếu null, FirmwareService sẽ tự lưu tên 'firmware_latest.bin'
@@ -306,6 +482,7 @@ Future<void> _downloadFirmwareToPhone() async {
                             }
                           },
                         );
+
                         if (mounted) {
                           setState(() {
                             localDownloadedBinPath = savedPath;
@@ -351,51 +528,143 @@ Future<void> _downloadFirmwareToPhone() async {
     if (mounted) _showErrorSnackBar('Lỗi tải cấu hình: $e');
   }
 }
-  Future<void> _uploadLocalBinToESP32() async {
-    final ip = _ipController.text.trim();
-    if (!_isValidServerAddress(ip)) {
-      _showErrorSnackBar(
-        _selectedLang == 'vi'
-            ? 'Vui lòng nhập địa chỉ IP/Server hợp lệ!'
-            : 'Please enter a valid IP address or Server URL!',
-      );
-      return;
+  // Future<void> _uploadLocalBinToESP32() async {
+  //   final ip = _ipController.text.trim();
+  //   if (!_isValidServerAddress(ip)) {
+  //     _showErrorSnackBar(
+  //       _selectedLang == 'vi'
+  //           ? 'Vui lòng nhập địa chỉ IP/Server hợp lệ!'
+  //           : 'Please enter a valid IP address or Server URL!',
+  //     );
+  //     return;
+  //   }
+  //   String? binPath = FirmwareService.localDownloadedBinPath;
+  //   if (binPath == null || !await File(binPath).exists()) {
+  //     final latestFile = await FirmwareService.getLatestDownloadedBinFile();
+  //     if (latestFile != null) {
+  //       binPath = latestFile.path;
+  //       FirmwareService.localDownloadedBinPath = binPath;
+  //     }
+  //   }
+  //   if (!mounted) return;
+  //   if (binPath == null || !await File(binPath).exists()) {
+  //     _showErrorSnackBar(
+  //       _selectedLang == 'vi'
+  //           ? 'Không tìm thấy file Firmware (.bin) nào! Vui lòng tải Firmware trước.'
+  //           : 'No Firmware (.bin) file found! Please download the Firmware first.',
+  //     );
+  //     return;
+  //   }
+  //   setState(() {
+  //     _isOTAUploading = true;
+  //   });
+  //   if (!mounted) return;
+  //   await Navigator.push(
+  //     context,
+  //     MaterialPageRoute(
+  //       builder: (context) => WebOTAScreen(
+  //         ip: ip,
+  //         binFilePath: binPath, // Truyền file .bin đã trỏ chính xác
+  //       ),
+  //     ),
+  //   );
+  //   if (!mounted) return;
+  //   setState(() {
+  //     _isOTAUploading = false;
+  //   });
+  //   _connect();
+  // }
+Future<void> _uploadLocalBinToESP32() async {
+  // 1. Thử lấy đường dẫn từ biến lưu tạm
+  String? binPath = FirmwareService.localDownloadedBinPath;
+  File? binFile;
+
+  // 2. Kiểm tra nếu biến tạm có giá trị và file thực sự tồn tại
+  if (binPath != null && binPath.isNotEmpty) {
+    binFile = File(binPath);
+    if (!await binFile.exists()) {
+      binFile = null; // Reset nếu đường dẫn cũ không còn hợp lệ
     }
-    String? binPath = FirmwareService.localDownloadedBinPath;
-    if (binPath == null || !await File(binPath).exists()) {
-      final latestFile = await FirmwareService.getLatestDownloadedBinFile();
-      if (latestFile != null) {
-        binPath = latestFile.path;
-        FirmwareService.localDownloadedBinPath = binPath;
-      }
+  }
+
+  // 3. Nếu chưa tìm thấy, quét trực tiếp thư mục Download/bin_esp32
+  if (binFile == null) {
+    binFile = await FirmwareService.getLatestDownloadedBinFile();
+    if (binFile != null) {
+      binPath = binFile.path;
+      FirmwareService.localDownloadedBinPath = binPath; // Cập nhật lại cache
     }
-    if (!mounted) return;
-    if (binPath == null || !await File(binPath).exists()) {
-      _showErrorSnackBar(
-        _selectedLang == 'vi'
-            ? 'Không tìm thấy file Firmware (.bin) nào! Vui lòng tải Firmware trước.'
-            : 'No Firmware (.bin) file found! Please download the Firmware first.',
-      );
-      return;
-    }
-    setState(() {
-      _isOTAUploading = true;
-    });
-    if (!mounted) return;
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => WebOTAScreen(
-          ip: ip,
-          binFilePath: binPath, // Truyền file .bin đã trỏ chính xác
-        ),
+  }
+
+  // 🟢 Điểm kiểm tra an toàn 1 (Trước khi cập nhật UI)
+  if (!mounted) return;
+
+  // 4. Kiểm tra lần cuối cùng xem binFile đã thực sự hợp lệ chưa
+  if (binFile == null || !await binFile.exists() || (await binFile.length()) == 0) {
+    _showErrorSnackBar('Không tìm thấy file Firmware (.bin) nào! Vui lòng tải Firmware trước.');
+    return;
+  }
+
+  debugPrint('[OTA] Đã tìm thấy file sẵn sàng nạp: ${binFile.path} (${await binFile.length()} bytes)');
+
+  setState(() {
+    _isOTAUploading = true;
+  });
+
+  // 🟢 Điểm kiểm tra an toàn 2 (Trước khi chuyển màn hình)
+  if (!mounted) return;
+
+  // Lấy IP kết nối hiện tại (Ưu tiên IP tĩnh của widget hoặc IP người dùng vừa nhập trong controller)
+  final String currentIp = widget.autoConnectIp ?? _ipController.text.trim();
+
+  // 5. Chuyển sang WebOTAScreen truyền thêm kênh WebSocket active
+  final bool? otaSuccess = await Navigator.push<bool>(
+    context,
+    MaterialPageRoute(
+      builder: (context) => WebOTAScreen(
+        ip: currentIp,
+        binFilePath: binFile?.path,
+        webSocketChannel: _channel, // 🟢 Truyền kênh WebSocket đang kết nối
       ),
-    );
-    if (!mounted) return;
-    setState(() {
-      _isOTAUploading = false;
-    });
-    _connect();
+    ),
+  );
+
+  // 🟢 Điểm kiểm tra an toàn 3 (Sau khi từ WebOTAScreen quay về)
+  if (!mounted) return;
+
+  setState(() {
+    _isOTAUploading = false;
+  });
+
+  // 6. Nếu vừa nạp OTA thành công: Dọn dẹp kết nối cũ và tự động tái kết nối sau 3 giây
+  if (otaSuccess == true) {
+    debugPrint('[OTA] Nạp thành công! Đang làm sạch kết nối và chờ ESP32 khởi động lại...');
+_disconnectSocket();
+    // Đóng WebSocket cũ an toàn (Tránh đụng độ socket khi ESP32 đổi session)
+    try {
+      _channel?.sink.close();
+      _channel = null;
+    } catch (e) {
+      debugPrint('[OTA] Lỗi đóng WebSocket cũ: $e');
+    }
+
+    // Chờ 3 giây để ESP32 chạy xong tiến trình reboot và bắt lại IP tĩnh 192.168.0.200
+    await Future.delayed(const Duration(seconds: 3));
+
+    if (mounted) {
+      _connect(); // Tự động kết nối lại vào sa bàn
+    }
+  }
+}
+// 🟢 HÀM NGẮT KẾT NỐI SOCKET AN TOÀN KHI DỌN BỘ NHỚ HOẶC NẠP OTA XONG
+ void _disconnectSocket() {
+    try {
+      _channel?.sink.close();
+      _channel = null;
+      debugPrint('[WS] Đã đóng kết nối WebSocket cũ.');
+    } catch (e) {
+      debugPrint('[WS] Lỗi khi đóng WebSocket: $e');
+    }
   }
   Future<void> openWebOTAInChrome(String esp32Ip) async {
     if (!_isValidServerAddress(esp32Ip)) {
@@ -446,61 +715,321 @@ Future<void> _downloadFirmwareToPhone() async {
       _showErrorSnackBar('Không thể mở trang web demo!');
     }
   }
-  void _connect() async {
-    final ip = _ipController.text.trim();
-    if (ip.isEmpty) {
-      _showErrorSnackBar('Vui lòng nhập địa chỉ IP hoặc Server Sa bàn!');
-      return;
-    }
-    if (!_isValidServerAddress(ip)) {
-      _showErrorSnackBar('Địa chỉ Server/IP không hợp lệ!');
-      return;
-    }
-    // 🟢 BỔ SUNG: Lưu địa chỉ IP / Tên miền hiện tại vào SharedPreferences
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('saved_ip', ip);
-    setState(() => _isLoading = true);
+  // void _connect() async {
+  //   final ip = _ipController.text.trim();
+  //   if (ip.isEmpty) {
+  //     _showErrorSnackBar('Vui lòng nhập địa chỉ IP hoặc Server Sa bàn!');
+  //     return;
+  //   }
+  //   if (!_isValidServerAddress(ip)) {
+  //     _showErrorSnackBar('Địa chỉ Server/IP không hợp lệ!');
+  //     return;
+  //   }
+  //   // 🟢 BỔ SUNG: Lưu địa chỉ IP / Tên miền hiện tại vào SharedPreferences
+  //   final prefs = await SharedPreferences.getInstance();
+  //   await prefs.setString('saved_ip', ip);
+  //   setState(() => _isLoading = true);
+  //   try {
+  //     Uri wsUrl;
+  //     if (ip.contains('onrender.com') || ip.startsWith('wss://') || ip.startsWith('ws://')) {
+  //       String formatted = ip;
+  //       if (!formatted.startsWith('ws://') && !formatted.startsWith('wss://')) {
+  //         formatted = 'wss://$formatted';
+  //       }
+  //       wsUrl = Uri.parse(formatted);
+  //     } else {
+  //       wsUrl = Uri.parse('ws://$ip:81');
+  //     }
+  //     final channel = WebSocketChannel.connect(wsUrl);
+  //     final results = await Future.wait([
+  //       channel.ready.timeout(
+  //         const Duration(seconds: 4),
+  //         onTimeout: () => throw TimeoutException('Mất kết nối'),
+  //       ),
+  //       _loadRemoteConfigFast(),
+  //     ]);
+  //     final configData = results[1] as Map<String, dynamic>;
+  //     if (!mounted) return;
+  //     setState(() => _isLoading = false);
+  //     Navigator.pushReplacement(
+  //       context,
+  //       MaterialPageRoute(
+  //         builder: (context) => MasterControlScreen(
+  //           currentLang: _selectedLang, // 👈 Truyền giá trị ngôn ngữ sang màn hình điều khiển
+  //           channel: channel,
+  //           ip: ip,
+  //           configData: configData,
+  //           ledStates: const {},
+  //         ),
+  //       ),
+  //     );
+  //   } catch (e) {
+  //     if (!mounted) return;
+  //     setState(() => _isLoading = false);
+  //     _showErrorSnackBar(
+  //         'Không thể kết nối tới sa bàn ($ip). Vui lòng kiểm tra lại IP hoặc Wi-Fi!');
+  //   }
+  // }
+//  void _connect() async {
+//     String ip = _ipController.text.trim();
+//     if (ip.isEmpty) {
+//       _showErrorSnackBar('Vui lòng nhập địa chỉ IP hoặc Server Sa bàn!');
+//       return;
+//     }
+
+//     // 🟢 1. CHUẨN HÓA IP: Xóa ws://, http://, port thừa và đổi .local sang IP tĩnh
+//     ip = ip.replaceAll('ws://', '').replaceAll('wss://', '').replaceAll('http://', '');
+//     if (ip.contains('.local')) {
+//       debugPrint('[DEBUG_CONN] ⚠️ Phát hiện tên miền .local, tự động chuyển về IP: 192.168.0.200');
+//       ip = '192.168.0.200';
+//     }
+//     if (ip.contains(':')) {
+//       ip = ip.split(':').first; // Lấy thuần túy IP (vd: 192.168.0.200)
+//     }
+
+//     if (!_isValidServerAddress(ip)) {
+//       _showErrorSnackBar('Địa chỉ Server/IP không hợp lệ!');
+//       return;
+//     }
+
+//     // 🟢 2. Lưu IP đã chuẩn hóa vào SharedPreferences
+//     final prefs = await SharedPreferences.getInstance();
+//     await prefs.setString('saved_ip', ip);
+
+//     setState(() => _isLoading = true);
+
+//     WebSocketChannel? channel;
+//     Map<String, dynamic> configData = {};
+//     bool isConnected = false;
+
+//     // Định dạng URI chuẩn cổng :81 cho ESP32
+//     final Uri wsUrl = Uri.parse('ws://$ip:81');
+
+//     debugPrint('[DEBUG_CONN] ==================================================');
+//     debugPrint('[DEBUG_CONN] 🚀 BẮT ĐẦU QUÁ TRÌNH KẾT NỐI TỚI: $wsUrl');
+
+//     // 🟢 3. VÒNG LẶP RETRY 3 LẦN NẾU ESP32 ĐANG BẬN NHẢ SLOT SOCKET
+//     for (int attempt = 1; attempt <= 3; attempt++) {
+//       debugPrint('[DEBUG_CONN] 🔄 [Lần $attempt/3] Đang gửi yêu cầu Handshake...');
+//       final Stopwatch sw = Stopwatch()..start();
+
+//       try {
+//         // Đóng socket cũ nếu đang treo ở client
+//         try {
+//           await channel?.sink.close();
+//         } catch (_) {}
+
+//         channel = WebSocketChannel.connect(wsUrl);
+
+//         // Đợi phản hồi Handshake (Timeout 3.5s cho mỗi lần thử)
+//         await channel.ready.timeout(
+//           const Duration(milliseconds: 3500),
+//           onTimeout: () {
+//             debugPrint('[DEBUG_CONN] ⚠️ [Lần $attempt/3] Timeout sau 3.5s! ESP32 chưa nhả socket.');
+//             throw TimeoutException('WebSocket Ready Timeout');
+//           },
+//         );
+
+//         sw.stop();
+//         debugPrint('[DEBUG_CONN] 🎉 [Lần $attempt/3] KẾT NỐI VỚI ESP32 THÀNH CÔNG sau ${sw.elapsedMilliseconds}ms!');
+//         isConnected = true;
+//         break; // Kết nối thành công -> Bỏ qua các lần retry còn lại
+
+//       } catch (e) {
+//         sw.stop();
+//         debugPrint('[DEBUG_CONN] ❌ [Lần $attempt/3] Thất bại (${sw.elapsedMilliseconds}ms). Chi tiết: $e');
+
+//         try {
+//           await channel?.sink.close();
+//           channel = null;
+//         } catch (_) {}
+
+//         if (attempt < 3) {
+//           debugPrint('[DEBUG_CONN] ⏳ Đang chờ 600ms để ESP32 giải phóng RAM/Socket rồi thử lại...');
+//           await Future.delayed(const Duration(milliseconds: 600));
+//         }
+//       }
+//     }
+
+//     // 🟢 4. XỬ LÝ KẾT QUẢ KẾT NỐI
+//     if (isConnected && channel != null) {
+//       // Tải Remote Config độc lập (Timeout 3 giây)
+//       debugPrint('[DEBUG_CONN] 📥 Bắt đầu tải Remote Config...');
+//       try {
+//         configData = await _loadRemoteConfigFast().timeout(
+//           const Duration(seconds: 3),
+//           onTimeout: () {
+//             debugPrint('[DEBUG_CONN] ⚠️ Tải Config bị Timeout, dùng Config mặc định.');
+//             return <String, dynamic>{};
+//           },
+//         );
+//         debugPrint('[DEBUG_CONN] ✅ Tải Remote Config hoàn tất.');
+//       } catch (configErr) {
+//         debugPrint('[DEBUG_CONN] ⚠️ Lỗi tải Config ($configErr), vẫn tiếp tục vào sa bàn.');
+//         configData = {};
+//       }
+
+//       if (!mounted) return;
+//       setState(() => _isLoading = false);
+
+//       // Chuyển sang màn hình Điều khiển
+//       Navigator.pushReplacement(
+//         context,
+//         MaterialPageRoute(
+//           builder: (context) => MasterControlScreen(
+//             currentLang: _selectedLang,
+//             channel: channel!,
+//             ip: ip,
+//             configData: configData,
+//             ledStates: const {},
+//           ),
+//         ),
+//       );
+
+//     } else {
+//       debugPrint('[DEBUG_CONN] ❌ RẤT TIẾC: Thử cả 3 lần đều không thể kết nối tới ESP32!');
+//       if (!mounted) return;
+//       setState(() => _isLoading = false);
+//       _showErrorSnackBar(
+//         'Không thể kết nối tới sa bàn ($ip). Vui lòng thử lại!',
+//       );
+//     }
+//   }
+void _connect() async {
+  String ip = _ipController.text.trim();
+  if (ip.isEmpty) {
+    _showErrorSnackBar('Vui lòng nhập địa chỉ IP hoặc Server Sa bàn!');
+    return;
+  }
+  ip = ip.replaceAll('ws://', '').replaceAll('wss://', '').replaceAll('http://', '');
+  if (ip.contains('.local')) {
+    debugPrint('[DEBUG_CONN] ⚠️ Phát hiện tên miền .local, tự động chuyển về IP: 192.168.0.200');
+    ip = '192.168.0.200';
+  }
+  if (ip.contains(':')) {
+    ip = ip.split(':').first;
+  }
+  if (!_isValidServerAddress(ip)) {
+    _showErrorSnackBar('Địa chỉ Server/IP không hợp lệ!');
+    return;
+  }
+
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setString('saved_ip', ip);
+
+  setState(() => _isLoading = true);
+
+  WebSocketChannel? channel;
+  Map<String, dynamic> configData = {};
+  bool isConnected = false;
+  
+  // 🟢 1. KHAI BÁO BIẾN sub Ở NGOÀI VÒNG LẶP ĐỂ KHÔNG BỊ LỖI UNDEFINED
+  StreamSubscription? sub;
+
+  final Uri wsUrl = Uri.parse('ws://$ip:81');
+  debugPrint('[DEBUG_CONN] ==================================================');
+  debugPrint('[DEBUG_CONN] 🚀 BẮT ĐẦU QUÁ TRÌNH KẾT NỐI TỚI: $wsUrl');
+
+  for (int attempt = 1; attempt <= 3; attempt++) {
+    debugPrint('[DEBUG_CONN] 🔄 [Lần $attempt/3] Đang thử kết nối WebSocket...');
+    Completer<bool> connectionCompleter = Completer<bool>();
+
     try {
-      Uri wsUrl;
-      if (ip.contains('onrender.com') || ip.startsWith('wss://') || ip.startsWith('ws://')) {
-        String formatted = ip;
-        if (!formatted.startsWith('ws://') && !formatted.startsWith('wss://')) {
-          formatted = 'wss://$formatted';
-        }
-        wsUrl = Uri.parse(formatted);
-      } else {
-        wsUrl = Uri.parse('ws://$ip:81');
-      }
-      final channel = WebSocketChannel.connect(wsUrl);
-      final results = await Future.wait([
-        channel.ready.timeout(
-          const Duration(seconds: 4),
-          onTimeout: () => throw TimeoutException('Mất kết nối'),
-        ),
-        _loadRemoteConfigFast(),
-      ]);
-      final configData = results[1] as Map<String, dynamic>;
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => MasterControlScreen(
-            currentLang: _selectedLang, // 👈 Truyền giá trị ngôn ngữ sang màn hình điều khiển
-            channel: channel,
-            ip: ip,
-            configData: configData,
-            ledStates: const {},
-          ),
-        ),
+      channel = WebSocketChannel.connect(wsUrl);
+
+      // Gán listener vào biến sub đã khai báo ở ngoài
+      sub = channel.stream.listen(
+        (data) {
+          debugPrint('[DEBUG_CONN] 📥 Nhận tín hiệu từ ESP32: $data');
+          if (!connectionCompleter.isCompleted) {
+            connectionCompleter.complete(true);
+          }
+        },
+        onError: (err) {
+          debugPrint('[DEBUG_CONN] ❌ Lỗi Stream khi bắt tay: $err');
+          if (!connectionCompleter.isCompleted) {
+            connectionCompleter.complete(false);
+          }
+        },
+        onDone: () {
+          if (!connectionCompleter.isCompleted) {
+            connectionCompleter.complete(false);
+          }
+        },
       );
+
+      await Future.delayed(const Duration(milliseconds: 300));
+      channel.sink.add('SYNC_ALL');
+
+      isConnected = await connectionCompleter.future.timeout(
+        const Duration(milliseconds: 3000),
+        onTimeout: () {
+          debugPrint('[DEBUG_CONN] ⚠️ [Lần $attempt/3] Hết thời gian chờ phản hồi!');
+          return false;
+        },
+      );
+
+      if (isConnected) {
+        debugPrint('[DEBUG_CONN] 🎉 [Lần $attempt/3] KẾT NỐI THÀNH CÔNG!');
+        break;
+      }
     } catch (e) {
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-      _showErrorSnackBar(
-          'Không thể kết nối tới sa bàn ($ip). Vui lòng kiểm tra lại IP hoặc Wi-Fi!');
+      debugPrint('[DEBUG_CONN] ❌ [Lần $attempt/3] Ngoại lệ: $e');
+      await sub?.cancel();
+      sub = null;
+      try {
+        await channel?.sink.close();
+      } catch (_) {}
+      channel = null;
+    }
+
+    if (!isConnected && attempt < 3) {
+      await sub?.cancel();
+      sub = null;
+      debugPrint('[DEBUG_CONN] ⏳ Đang chờ 500ms trước khi thử lại...');
+      await Future.delayed(const Duration(milliseconds: 500));
     }
   }
+
+  // 🟢 2. XỬ LÝ CHUYỂN MÀNH HÌNH AN TOÀN
+  if (isConnected && channel != null) {
+    // HỦY BỎ SUBSCRIPTION CỦA CONNECT SCREEN TRƯỚC KHI TRUYỀN CHANNEL SANG MASTER SCREEN
+    await sub?.cancel();
+    sub = null;
+
+    debugPrint('[DEBUG_CONN] 📥 Bắt đầu tải Remote Config...');
+    try {
+      configData = await _loadRemoteConfigFast().timeout(
+        const Duration(seconds: 3),
+        onTimeout: () => <String, dynamic>{},
+      );
+    } catch (_) {
+      configData = {};
+    }
+
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => MasterControlScreen(
+          currentLang: _selectedLang,
+          channel: channel!,
+          ip: ip,
+          configData: configData,
+          ledStates: const {},
+        ),
+      ),
+    );
+  } else {
+    await sub?.cancel();
+    sub = null;
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+    _showErrorSnackBar('Không thể kết nối tới sa bàn ($ip). Vui lòng thử lại!');
+  }
+}
   void _showErrorSnackBar(String message) {
     ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
