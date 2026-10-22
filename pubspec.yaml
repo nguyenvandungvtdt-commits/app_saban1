@@ -21,6 +21,8 @@ dependencies:
   webview_flutter_android: ^4.14.1
   media_scanner: ^2.2.0
   cached_network_image: ^3.3.1
+  permission_handler: 11.3.1
+  shelf: ^1.4.1              # 🟢 THÊM DÒNG NÀY (HTTP Server nhẹ cho Flutter)
 
 dev_dependencies:
   flutter_test:

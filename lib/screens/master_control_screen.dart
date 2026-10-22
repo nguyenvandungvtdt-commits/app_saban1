@@ -310,7 +310,7 @@ Future<void> _loadBackupConfigAndParse() async {
     List<String> states = parts[0].split(',');
     if (mounted) {
       setState(() {
-        for (int i = 0; i < states.length && i < 108; i++) {
+        for (int i = 0; i < states.length && i < _ledStates.length; i++) {
           _ledStates[i] = (states[i] == '1'); // 👈 Sử dụng thống nhất _ledStates
         }
       });
@@ -914,50 +914,121 @@ Future<void> _downloadFirmwareToPhone() async {
 //     _connect(); 
 //   }
 // }
-Future<void> _uploadLocalBinToESP32() async {
-  // 1. Tìm đường dẫn file .bin từ bộ nhớ tạm hoặc quét thư mục
-  String? binPath = FirmwareService.localDownloadedBinPath;
+// Future<void> _uploadLocalBinToESP32() async {
+//   // 1. Tìm đường dẫn file .bin từ bộ nhớ tạm hoặc quét thư mục
+//   String? binPath = FirmwareService.localDownloadedBinPath;
 
-  if (binPath == null || !await File(binPath).exists()) {
-    final latestFile = await FirmwareService.getLatestDownloadedBinFile();
-    if (latestFile != null) {
-      binPath = latestFile.path;
-      FirmwareService.localDownloadedBinPath = binPath;
+//   if (binPath == null || !await File(binPath).exists()) {
+//     final latestFile = await FirmwareService.getLatestDownloadedBinFile();
+//     if (latestFile != null) {
+//       binPath = latestFile.path;
+//       FirmwareService.localDownloadedBinPath = binPath;
+//     }
+//   }
+
+//   // 🟢 Điểm kiểm tra an toàn 1 (Trước khi dùng context để hiển thị SnackBar)
+//   if (!mounted) return;
+
+//   // 2. Nếu không tìm thấy file nào thì báo lỗi
+//   if (binPath == null || !await File(binPath).exists()) {
+//     _showErrorSnackBar('Không tìm thấy file Firmware (.bin) nào! Vui lòng tải Firmware trước.');
+//     return;
+//   }
+
+//   setState(() {
+//     _isOTAUploading = true;
+//   });
+
+//   // 🟢 Điểm kiểm tra an toàn 2 (Trước khi mở màn hình WebOTAScreen)
+//   if (!mounted) return;
+
+//   await Navigator.push(
+//     context,
+//     MaterialPageRoute(
+//       builder: (context) => WebOTAScreen(
+//         ip: widget.ip,
+//         binFilePath: binPath,
+//       ),
+//     ),
+//   );
+
+//   // 🟢 Điểm kiểm tra an toàn 3 (Sau khi từ WebOTAScreen quay trở lại)
+//   if (!mounted) return;
+
+//   setState(() {
+//     _isOTAUploading = false;
+//   });
+//   _connect();
+// }
+
+Future<void> _uploadLocalBinToESP32() async {
+  // 1. Thử lấy đường dẫn từ biến lưu tạm
+  String? binPath = FirmwareService.localDownloadedBinPath;
+  File? binFile;
+
+  // 2. Kiểm tra nếu biến tạm có giá trị và file thực sự tồn tại
+  if (binPath != null && binPath.isNotEmpty) {
+    binFile = File(binPath);
+    if (!await binFile.exists()) {
+      binFile = null; // Reset nếu đường dẫn cũ không còn hợp lệ
     }
   }
 
-  // 🟢 Điểm kiểm tra an toàn 1 (Trước khi dùng context để hiển thị SnackBar)
+  // 3. Nếu chưa tìm thấy, quét trực tiếp thư mục Download/bin_esp32
+  if (binFile == null) {
+    binFile = await FirmwareService.getLatestDownloadedBinFile();
+    if (binFile != null) {
+      binPath = binFile.path;
+      FirmwareService.localDownloadedBinPath = binPath; // Cập nhật lại cache
+    }
+  }
+
+  // 🟢 Điểm kiểm tra an toàn 1 (Trước khi cập nhật UI)
   if (!mounted) return;
 
-  // 2. Nếu không tìm thấy file nào thì báo lỗi
-  if (binPath == null || !await File(binPath).exists()) {
+  // 4. Kiểm tra lần cuối cùng xem binFile đã thực sự hợp lệ chưa
+  if (binFile == null || !await binFile.exists() || (await binFile.length()) == 0) {
     _showErrorSnackBar('Không tìm thấy file Firmware (.bin) nào! Vui lòng tải Firmware trước.');
     return;
   }
+
+  debugPrint('[OTA] Đã tìm thấy file sẵn sàng nạp: ${binFile.path} (${await binFile.length()} bytes)');
 
   setState(() {
     _isOTAUploading = true;
   });
 
-  // 🟢 Điểm kiểm tra an toàn 2 (Trước khi mở màn hình WebOTAScreen)
+  // 🟢 Điểm kiểm tra an toàn 2 (Trước khi chuyển màn hình)
   if (!mounted) return;
 
+  // 5. Chuyển sang màn hình nạp WebOTAScreen với đường dẫn chuẩn
+  // await Navigator.push(
+  //   context,
+  //   MaterialPageRoute(
+  //     builder: (context) => WebOTAScreen(
+  //       ip: widget.ip,
+  //       binFilePath: binFile!.path,
+  //     ),
+  //   ),
+  // );
   await Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (context) => WebOTAScreen(
-        ip: widget.ip,
-        binFilePath: binPath,
-      ),
+  context,
+  MaterialPageRoute(
+    builder: (context) => WebOTAScreen(
+      ip: widget.ip,
+      binFilePath: binFile?.path, // 🟢 Nên dùng Null-safe ?.path thay vì !.path để tránh crash
+      webSocketChannel: _channel, // 🟢 Truyền kết nối WebSocket đang active vào đây
     ),
-  );
+  ),
+);
 
-  // 🟢 Điểm kiểm tra an toàn 3 (Sau khi từ WebOTAScreen quay trở lại)
+  // 🟢 Điểm kiểm tra an toàn 3 (Sau khi từ WebOTAScreen quay về)
   if (!mounted) return;
 
   setState(() {
     _isOTAUploading = false;
   });
+  
   _connect();
 }
 void _connect() {
@@ -1026,41 +1097,103 @@ void _handleDisconnection() {
     _resetToConnectScreen();
   }
 }
+// Future<void> openWebOTAInChrome(String esp32Ip) async {
+//   final Uri url = Uri.parse('http://$esp32Ip/update');
+//   try {
+//     if (mounted) {
+//       setState(() {
+//         _isOTAUploading = true;
+//       });
+//       debugPrint('[OTA] Đã bật cờ _isOTAUploading = true (Trình duyệt ngoài)');
+//     }
+//     bool launched = await launchUrl(
+//       url,
+//       mode: LaunchMode.externalApplication,
+//     );
+//     if (launched) {
+//       Future.delayed(const Duration(seconds: 30), () {
+//         if (mounted && _isOTAUploading) {
+//           setState(() {
+//             _isOTAUploading = false;
+//           });
+//           debugPrint('[OTA] Tự động reset cờ _isOTAUploading sau 30s timeout');
+//         }
+//       });
+//     } else {
+//       debugPrint('[OTA] Không thể mở trình duyệt Chrome.');
+//       if (mounted) {
+//         setState(() {
+//           _isOTAUploading = false; // Reset cờ nếu mở thất bại
+//         });
+//       }
+//     }
+//   } catch (e) {
+//     debugPrint('[OTA] Lỗi mở Chrome: $e');
+//     if (mounted) {
+//       setState(() {
+//         _isOTAUploading = false; // Reset cờ nếu gặp lỗi
+//       });
+//     }
+//   }
+// }
 Future<void> openWebOTAInChrome(String esp32Ip) async {
-  final Uri url = Uri.parse('http://$esp32Ip/update');
+  // 1. In ra giá trị đầu vào ban đầu
+  debugPrint('[OTA Debug] Gốc truyền vào esp32Ip: "$esp32Ip"');
+
+  // 2. Làm sạch chuỗi IP/Host (xóa ws://, wss://, http://, https://)
+  String cleanHost = esp32Ip.trim()
+      .replaceAll(RegExp(r'^(ws://|wss://|http://|https://)'), '')
+      .split('/')[0]
+      .split(':')[0];
+
+  debugPrint('[OTA Debug] Host sau khi làm sạch: "$cleanHost"');
+
+  // 3. Fallback mDNS sang IP tĩnh nếu chạy trình duyệt ngoài
+  if (cleanHost.endsWith('.local')) {
+    cleanHost = '192.168.0.200'; // IP tĩnh cố định của ESP32[cite: 1]
+    debugPrint('[OTA Debug] Phát hiện đuôi .local -> Đã đổi sang IP fallback: $cleanHost');
+  }
+
+  // 4. Tạo URL đầy đủ
+  final Uri url = Uri.parse('http://$cleanHost/update');
+  debugPrint('[OTA Debug] URL cuối cùng gửi sang Chrome: $url');
+
   try {
     if (mounted) {
       setState(() {
         _isOTAUploading = true;
       });
-      debugPrint('[OTA] Đã bật cờ _isOTAUploading = true (Trình duyệt ngoài)');
     }
+
     bool launched = await launchUrl(
       url,
       mode: LaunchMode.externalApplication,
     );
+
+    debugPrint('[OTA Debug] Trạng thái launchUrl: $launched');
+
     if (launched) {
       Future.delayed(const Duration(seconds: 30), () {
         if (mounted && _isOTAUploading) {
           setState(() {
             _isOTAUploading = false;
           });
-          debugPrint('[OTA] Tự động reset cờ _isOTAUploading sau 30s timeout');
+          debugPrint('[OTA Debug] Tự động reset cờ _isOTAUploading sau 30s timeout');
         }
       });
     } else {
-      debugPrint('[OTA] Không thể mở trình duyệt Chrome.');
+      debugPrint('[OTA Debug] ❌ Không thể mở trình duyệt Chrome.');
       if (mounted) {
         setState(() {
-          _isOTAUploading = false; // Reset cờ nếu mở thất bại
+          _isOTAUploading = false;
         });
       }
     }
   } catch (e) {
-    debugPrint('[OTA] Lỗi mở Chrome: $e');
+    debugPrint('[OTA Debug] ❌ Lỗi ngoại lệ khi mở Chrome: $e');
     if (mounted) {
       setState(() {
-        _isOTAUploading = false; // Reset cờ nếu gặp lỗi
+        _isOTAUploading = false;
       });
     }
   }
