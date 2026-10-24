@@ -9,7 +9,6 @@ import '../services/config_service.dart';
 import 'buildings_list_screen.dart';
 import 'connect_screen.dart';
 import 'package:logger/logger.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'dart:async';
 import 'package:web_socket_channel/io.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -38,23 +37,17 @@ class MasterControlScreen extends StatefulWidget {
 class _MasterControlScreenState extends State<MasterControlScreen> {
   Map<int, bool> _ledStates = {};
   StreamSubscription? _wsSubscription;
-  final TextEditingController _ipController =
-      TextEditingController(text: '192.168.0.200');
   String _projectName = 'Đang tải sa bàn...';
   List<Map<String, dynamic>> _buildings = [];
   Map<String, dynamic> _projectInfo = {};
-  Map<String, dynamic> _configData = {};
+  final Map<String, dynamic> _configData = {};
   Map<String, dynamic> _dynamicUiConfig = {};
   String _overviewImage = 'assets/images/overview.jpg';
   bool _isLoaded = false;
-  bool _isRefreshing = false;
   bool _isMotorActive = false;
-  bool _isOTAUploading = false; // 🟢 Biến cờ đánh dấu đang nạp OTA
   bool get _isEn => widget.currentLang == 'en';
   IOWebSocketChannel? _channel;
-  String? localDownloadedBinPath;
   bool isConnected = false;
-  Timer? _otaWatchdogTimer;
   List<Map<String, dynamic>> _enabledEffects = [
     {"cmd": "TOGGLE_EVEN_ODD", "name": "CHẮN / LẺ", "icon": Icons.auto_awesome_rounded},
     {"cmd": "TOGGLE_METEOR", "name": "BĂNG SAO", "icon": Icons.auto_graph_rounded},
@@ -88,29 +81,11 @@ void _startPingTimer() {
   });
 }
 @override
+@override
 void initState() {
   super.initState();
   isConnected = true;
   _ledStates = Map<int, bool>.from(widget.ledStates);
-  if (widget.ip.isNotEmpty) {
-    _ipController.text = widget.ip;
-  }
-  if (widget.configData != null) {
-    _configData = widget.configData!;
-  }
-  // Map<String, dynamic>? configToUse = widget.configData;
-  // if (configToUse != null &&
-  //     (configToUse.containsKey('d') ||
-  //         configToUse.containsKey('ui_config') ||
-  //         configToUse.containsKey('buildings'))) {
-  //   _dynamicUiConfig = configToUse['ui_config'] ?? {};
-  //   _parseConfigMap(configToUse);
-  // } else if (widget.cachedJson != null && widget.cachedJson!.isNotEmpty) {
-  //   _parseFlatJson(widget.cachedJson!, isFromCache: true);
-  // } else {
-  //   _loadBackupConfigAndParse();
-  // }
-  // 🟢 1. CẬP NHẬT ĐOẠN ĐỌC CONFIG NÀY:
   Map<String, dynamic>? configToUse = widget.configData;
   if (configToUse != null &&
       (configToUse.containsKey('d') ||
@@ -123,7 +98,6 @@ void initState() {
     _parseFlatJson(widget.cachedJson!, isFromCache: true);
     if (mounted) setState(() => _isLoaded = true);
   } else {
-    // 🟢 Thay _loadBackupConfigAndParse() bằng hàm đọc thẳng Cache Local
     _loadConfigFromLocalCache();
   }
   if (mounted) {
@@ -148,9 +122,11 @@ void initState() {
               _onModeChangedFromHardware!(activeCmd);
             }
           }
-        } else if (message.startsWith('SYNCALL11:')) {
+        } 
+        else if (message.startsWith('SYNCALL11:')) {
           _parseSyncAll11(message);
-        } else if (message.startsWith('TYPE:')) {
+        } 
+        else if (message.startsWith('TYPE:')) {
           final parts = message.split(':');
           if (parts.length >= 3) {
             final int targetType = int.tryParse(parts[1].trim()) ?? -1;
@@ -171,7 +147,8 @@ void initState() {
               });
             }
           }
-        } else if (message.startsWith('ALL:')) {
+        } 
+        else if (message.startsWith('ALL:')) {
           final parts = message.split(':');
           if (parts.length >= 2) {
             final bool isOn = parts[1].trim() == '1';
@@ -192,7 +169,8 @@ void initState() {
               });
             }
           }
-        } else if (message.startsWith('{')) {
+        } 
+        else if (message.startsWith('{')) {
           try {
             final Map<String, dynamic> msgJson = jsonDecode(message);
             if (msgJson.containsKey('status') && msgJson.containsKey('device')) {
@@ -209,7 +187,8 @@ void initState() {
           } catch (e) {
             debugPrint("Lỗi parse JSON WebSocket: $e");
           }
-        } else if (message.contains(':') && !message.startsWith('OTA_')) {
+        } 
+        else if (message.contains(':')) {
           final parts = message.split(':');
           if (parts.length == 2) {
             final int? hwIndex = int.tryParse(parts[0].trim());
@@ -219,16 +198,6 @@ void initState() {
                 _ledStates[hwIndex] = isOn;
               });
             }
-          }
-        } else if (message == 'OTA_SUCCESS') {
-          if (mounted) {
-            Navigator.of(context, rootNavigator: true).pop();
-            _showOTASuccessDialog();
-          }
-        } else if (message.startsWith('OTA_ERROR:')) {
-          String errType = message.substring(10).trim();
-          if (mounted) {
-            _handleOTAErrorFromHardware(errType);
           }
         }
       },
@@ -250,7 +219,6 @@ void initState() {
 @override
 void dispose() {
   _wsSubscription?.cancel();
-  _otaWatchdogTimer?.cancel();
   _pingTimer?.cancel(); // 🟢 Hủy Timer khi thoát màn hình để tránh rò rỉ bộ nhớ
   super.dispose();
 }
@@ -258,17 +226,18 @@ Future<void> _loadConfigFromLocalCache() async {
   try {
     debugPrint("🚀 [MASTER] Đang đọc cấu hình đã lưu từ ConnectScreen...");
     final cachedJson = await ConfigService.getSavedJsonConfig();
-
     if (cachedJson != null && cachedJson.isNotEmpty) {
-      final Map<String, dynamic> configData = jsonDecode(cachedJson);
+      final Map<String, dynamic> loadedMap = jsonDecode(cachedJson);
       if (mounted) {
         setState(() {
-          _dynamicUiConfig = configData['ui_config'] ?? {};
+          _configData.clear();
+          _configData.addAll(loadedMap); // 🟢 Đổ dữ liệu vào Map final
+          _dynamicUiConfig = _configData['ui_config'] ?? {};
         });
-        await _parseConfigMap(configData);
+        await _parseConfigMap(_configData);
         if (mounted) {
           setState(() {
-            _isLoaded = true; // 🟢 Bật cờ load thành công lập tức!
+            _isLoaded = true; // 🟢 Bật cờ load thành công!
           });
         }
         debugPrint("🎉 [MASTER] Tải giao diện Sa Bàn từ Cache thành công!");
@@ -278,88 +247,12 @@ Future<void> _loadConfigFromLocalCache() async {
   } catch (e) {
     debugPrint("⚠️ [MASTER] Lỗi đọc Cache Local: $e");
   }
-
-  // Dự phòng nếu Cache rỗng completely
   if (mounted) {
     setState(() {
-      _isLoaded = true; // Vẫn cho hiện UI với dữ liệu mặc định, không để xoay
+      _isLoaded = true;
     });
   }
 }
-// Future<void> _loadBackupConfigAndParse() async {
-//   try {
-//     final response = await http.get(Uri.parse('https://saban-demo.onrender.com/config')).timeout(const Duration(seconds: 3));
-//     if (response.statusCode == 200) {
-//       final Map<String, dynamic> remoteData = jsonDecode(utf8.decode(response.bodyBytes));
-//       if (mounted) {
-//         setState(() {
-//           _dynamicUiConfig = remoteData['ui_config'] ?? {};
-//         });
-//         _parseConfigMap(remoteData);
-//         return;
-//       }
-//     }
-//   } catch (e) {
-//     debugPrint("Không tải được Config từ Render, chuyển sang mảng fallback: $e");
-//   }
-//   if (mounted) {
-//     _parseConfigMap({
-//       "project_info": {"name": "Dự Án Sa Bàn Tòa Nhà"},
-//       "d": [
-//         ["THÁP A", "TẦNG 01", "Shophouse-A101", 100, 0, "Shophouse khối đế"],
-//         ["THÁP A", "TẦNG 01", "Shophouse-A102", 100, 1, "Shophouse khối đế"],
-//         ["THÁP A", "TẦNG 01", "Shophouse-A103", 100, 2, "Shophouse khối đế"],
-//         ["THÁP A", "TẦNG 01", "Sảnh AB", 200, 3, "Sảnh Tòa Nhà"],
-//         ["THÁP A", "TẦNG 02", "BeautySalon A", 201, 4, "BeautySalon"],
-//         ["THÁP A", "TẦNG 02", "Gym-SHCĐ A", 202, 5, "Gym / SHCĐ"],
-//         ["THÁP A", "TẦNG 02", "Game", 203, 6, "Khu Game"]
-//       ]
-//     });
-//   }
-// }
-  void _handleOTAErrorFromHardware(String errType) {
-    if (Navigator.of(context, rootNavigator: true).canPop()) {
-      Navigator.of(context, rootNavigator: true).pop();
-    }
-    String detailMessage = 'Đã xảy ra lỗi không xác định trong quá trình nạp!';
-    if (errType == 'FILE_TOO_LARGE') {
-      detailMessage = '⚠️ File Firmware quá nặng!\nBộ nhớ Flash ESP32 không đủ dung lượng.';
-    } else if (errType == 'STREAM_INTERRUPTED') {
-      detailMessage = '⚠️ Kết nối Wi-Fi bị đứt đoạn giữa chừng!';
-    } else if (errType == 'FLASH_WRITE_FAILED') {
-      detailMessage = '⚠️ Lỗi ghi vào bộ nhớ Flash ESP32!';
-    } else if (errType == 'ALREADY_LATEST') {
-      detailMessage = 'ℹ️ Mạch sa bàn hiện đã chạy đúng phiên bản Firmware này rồi.';
-    } else if (errType.startsWith('HTTP_CODE_')) {
-      String code = errType.replaceAll('HTTP_CODE_', '');
-      detailMessage = '⚠️ ESP32 không thể nhận file .bin (Mã lỗi HTTP: $code).';
-    }
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(
-          children: [
-            Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 28),
-            SizedBox(width: 10),
-            Text('Nạp OTA Thất Bại', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-          ],
-        ),
-        content: Text(detailMessage, style: const TextStyle(fontSize: 14, height: 1.4)),
-        actions: [
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.redAccent,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            onPressed: () => Navigator.pop(context),
-            child: const Text('ĐÃ HỂU'),
-          ),
-        ],
-      ),
-    );
-  }
   void _toggleMotor(bool value) {
     setState(() {
       _isMotorActive = value;
@@ -579,33 +472,6 @@ Future<void> _parseConfigMap(Map<String, dynamic> raw) async {
 final logger = Logger(
   printer: PrettyPrinter(methodCount: 0), 
 );
-Future<bool> uploadToElegantOTA(String filePath, String esp32Ip) async {
-  try {
-    var uri = Uri.parse("http://$esp32Ip/update");
-    var request = http.MultipartRequest('POST', uri);
-    var fileBytes = await File(filePath).readAsBytes();
-    String fileName = filePath.split(RegExp(r'[/\\]')).last;
-    var multipartFile = http.MultipartFile.fromBytes(
-      'raw_file',
-      fileBytes,
-      filename: fileName, // 👈 Truyền tên file động thay vì 'sketch_oct6a.ino.bin'
-    );
-    request.files.add(multipartFile);
-    logger.i("[OTA] Đang gửi $fileName tới $uri ...");
-    var streamedResponse = await request.send();
-    var response = await http.Response.fromStream(streamedResponse);
-    if (response.statusCode == 200) {
-      logger.i("[OTA] Nạp $fileName thành công! ESP32 đang khởi động lại...");
-      return true;
-    } else {
-      logger.e("[OTA] Thất bại. Mã lỗi HTTP: ${response.statusCode}");
-      return false;
-    }
-  } catch (e) {
-    logger.e("[OTA] Lỗi kết nối: $e");
-    return false;
-  }
-}
   void _resetToConnectScreen() async {
     await ConfigService.clearConfig();
     if (!mounted) return;
@@ -624,20 +490,26 @@ Future<bool> uploadToElegantOTA(String filePath, String esp32Ip) async {
     return leds;
   }
 void _handleDisconnection() {
-  debugPrint('[WS] Kết nối ngắt. Cờ _isOTAUploading = $_isOTAUploading');
+  debugPrint('[WS] Mất kết nối tới Sa bàn trên MasterControlScreen.');
   if (!mounted) return;
-  if (_isOTAUploading) {
-    debugPrint('[OTA] Đang nạp Firmware, giữ nguyên giao diện WebView.');
-    return;
-  }
   _wsSubscription?.cancel();
   _wsSubscription = null;
+  setState(() {
+    isConnected = false;
+  });
   ScaffoldMessenger.of(context).hideCurrentSnackBar();
   ScaffoldMessenger.of(context).showSnackBar(
     const SnackBar(
-      content: Text('⚠️ Đã mất kết nối tới Sa bàn. Đang thử kết nối lại...'),
+      content: Row(
+        children: [
+          Icon(Icons.wifi_off_rounded, color: Colors.white, size: 20),
+          SizedBox(width: 10),
+          Text('⚠️ Mất kết nối tới Sa bàn. Đang thử nối lại...'),
+        ],
+      ),
       duration: Duration(seconds: 3),
       backgroundColor: Colors.orange,
+      behavior: SnackBarBehavior.floating,
     ),
   );
   _reconnectWebSocket();
@@ -650,173 +522,6 @@ void _reconnectWebSocket() async {
   await Future.delayed(const Duration(seconds: 2));
   if (!mounted) return;
 }
-Future<void> openWebOTAInChrome(String esp32Ip) async {
-  debugPrint('[OTA Debug] Gốc truyền vào esp32Ip: "$esp32Ip"');
-  String cleanHost = esp32Ip.trim()
-      .replaceAll(RegExp(r'^(ws://|wss://|http://|https://)'), '')
-      .split('/')[0]
-      .split(':')[0];
-  debugPrint('[OTA Debug] Host sau khi làm sạch: "$cleanHost"');
-  if (cleanHost.endsWith('.local')) {
-    cleanHost = '192.168.0.200'; // IP tĩnh cố định của ESP32[cite: 1]
-    debugPrint('[OTA Debug] Phát hiện đuôi .local -> Đã đổi sang IP fallback: $cleanHost');
-  }
-  final Uri url = Uri.parse('http://$cleanHost/update');
-  debugPrint('[OTA Debug] URL cuối cùng gửi sang Chrome: $url');
-  try {
-    if (mounted) {
-      setState(() {
-        _isOTAUploading = true;
-      });
-    }
-    bool launched = await launchUrl(
-      url,
-      mode: LaunchMode.externalApplication,
-    );
-    debugPrint('[OTA Debug] Trạng thái launchUrl: $launched');
-    if (launched) {
-      Future.delayed(const Duration(seconds: 30), () {
-        if (mounted && _isOTAUploading) {
-          setState(() {
-            _isOTAUploading = false;
-          });
-          debugPrint('[OTA Debug] Tự động reset cờ _isOTAUploading sau 30s timeout');
-        }
-      });
-    } else {
-      debugPrint('[OTA Debug] ❌ Không thể mở trình duyệt Chrome.');
-      if (mounted) {
-        setState(() {
-          _isOTAUploading = false;
-        });
-      }
-    }
-  } catch (e) {
-    debugPrint('[OTA Debug] ❌ Lỗi ngoại lệ khi mở Chrome: $e');
-    if (mounted) {
-      setState(() {
-        _isOTAUploading = false;
-      });
-    }
-  }
-}
-  void _showOTASuccessDialog() {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Row(
-            children: [
-              Icon(Icons.check_circle_rounded, color: Colors.green, size: 28),
-              SizedBox(width: 10),
-              Text('Cập Nhật Thành Công!', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            ],
-          ),
-          content: const Text(
-            'Firmware mới đã được nạp thành công vào ESP32.\nMạch sa bàn đang tự khởi động lại và đã sẵn sàng hoạt động!',
-            style: TextStyle(fontSize: 14),
-          ),
-          actions: [
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-              onPressed: () => Navigator.pop(context),
-              child: const Text('ĐỒNG Ý'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-Future<void> _refreshDataFromCloud() async {
-    if (_isRefreshing) {
-      debugPrint('⚠️ [REFRESH] Đang trong quá trình cập nhật, bỏ qua yêu cầu!');
-      return;
-    }
-    setState(() {
-      _isRefreshing = true;
-    });
-    debugPrint('🚀 [REFRESH] Bắt đầu tải JSON mới từ GitHub Gist...');
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Đang tải cấu hình & hình ảnh mới nhất...'),
-          duration: Duration(seconds: 2),
-        ),
-      );
-    }
-    final int timestamp = DateTime.now().millisecondsSinceEpoch;
-    final String rawGistUrl =
-        'https://gist.githubusercontent.com/nguyenvandungvtdt-commits/b3440aa5a5ab9e6e69bb570b389c88cb/raw/config.json?t=$timestamp';
-    try {
-      debugPrint('🌐 [REFRESH] URL Fetch: $rawGistUrl');
-      final response = await http.get(
-        Uri.parse(rawGistUrl),
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
-          'Pragma': 'no-cache',
-          'Expires': '0',
-        },
-      ).timeout(const Duration(seconds: 8));
-      debugPrint('📡 [REFRESH] HTTP Response Code: ${response.statusCode}');
-      if (response.statusCode == 200) {
-        final String rawJsonStr = utf8.decode(response.bodyBytes);
-        final Map<String, dynamic> newData = jsonDecode(rawJsonStr);
-        debugPrint('📦 [REFRESH] Đã parse JSON thành công! Tổng số phòng trong "d": ${(newData['d'] as List?)?.length}');
-        await ConfigService.saveConfig(widget.ip, rawJsonStr);
-        debugPrint('⚡ [REFRESH] Gửi lệnh RESET_ALL sang ESP32...');
-        widget.channel.sink.add("RESET_ALL");
-        debugPrint('✅ [REFRESH] Đã bắn lệnh RESET_ALL sang ESP32!');
-        debugPrint('🖼️ [REFRESH] Đang xóa ImageCache Flutter...');
-        debugPrint('⚙️ [REFRESH] Đang parse lại Config Map sang UI...');
-        setState(() {
-          _ledStates.clear();
-          _dynamicUiConfig = newData['ui_config'] ?? {}; // Cập nhật ngay layout nút bấm & position mới
-          _parseConfigMap(newData); // Parse lại danh sách phòng, tòa nhà
-        });
-        debugPrint('🎉 [REFRESH] Hoàn tất toàn bộ tiến trình cập nhật!');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Cập nhật thành công! Đã reset toàn bộ sa bàn.'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
-      } else {
-        debugPrint('❌ [REFRESH] Lỗi HTTP: ${response.statusCode}');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Cập nhật thất bại! Mã lỗi: ${response.statusCode}'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      debugPrint('💥 [REFRESH] Lỗi Catch Exception: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Lỗi kết nối máy chủ: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isRefreshing = false;
-        });
-      }
-      debugPrint('🏁 [REFRESH] Hoàn thành hàm _refreshDataFromCloud()');
-    }
-  }
 bool _isSendingWsCommand = false;
 void _toggleLedList(List<int> ledIndices, [bool? explicitState]) async {
   if (ledIndices.isEmpty || _isSendingWsCommand) return;
@@ -864,61 +569,11 @@ void _sendWsCommand(String cmd) {
     }
   }
 }
-//   Widget buildOverviewImage(String imagePath) {
-//   debugPrint("🖼️ [DEBUG UI] Đang render ảnh với path: '$imagePath'");
-//   if (imagePath.isEmpty) {
-//     return const Icon(Icons.image, size: 50, color: Colors.grey);
-//   }
-//   if (kIsWeb || imagePath.startsWith('blob:') || imagePath.startsWith('http')) {
-//     return Image.network(
-//       imagePath,
-//       fit: BoxFit.cover,
-//       errorBuilder: (context, error, stackTrace) =>
-//           const Icon(Icons.broken_image, color: Colors.red),
-//     );
-//   }
-//   else if (!imagePath.startsWith('assets/')) {
-//     debugPrint("📱 [DEBUG UI] Render ảnh bằng Image.file()");
-//     return Image.file(
-//       File(imagePath),
-//       fit: BoxFit.cover,
-//       errorBuilder: (context, error, stackTrace) {
-//         debugPrint("❌ [DEBUG Image.file ERROR]: $error");
-//         return const Icon(Icons.broken_image, color: Colors.red);
-//       },
-//     );
-//   }
-//   else {
-//     return Image.asset(
-//       imagePath,
-//       fit: BoxFit.cover,
-//       errorBuilder: (context, error, stackTrace) =>
-//           const Icon(Icons.image_not_supported, color: Colors.grey),
-//     );
-//   }
-// }
-// Widget buildOverviewImage(String imagePath) {
-//   debugPrint("🖼️ [DEBUG UI] Đang render ảnh với path: '$imagePath'");
-  
-//   if (imagePath.isEmpty) {
-//     return const Icon(Icons.image, size: 50, color: Colors.grey);
-//   }
-
-//   // 🟢 Dùng DynamicImage với đúng tham số imagePath & fallbackAsset
-//   return DynamicImage(
-//     imagePath: imagePath,
-//     fit: BoxFit.cover,
-//     fallbackAsset: 'assets/images/overview.jpg',
-//   );
-// }
 Widget buildOverviewImage(String imagePath) {
   debugPrint("🖼️ [DEBUG UI] Đang render ảnh với path: '$imagePath'");
-  
-  // Nếu path rỗng, dùng thẳng asset local để hiển thị lập tức 0s
   final String validPath = imagePath.trim().isNotEmpty 
       ? imagePath 
       : 'assets/images/overview.jpg';
-
   return DynamicImage(
     imagePath: validPath,
     fit: BoxFit.cover,
@@ -2009,8 +1664,6 @@ Widget _buildScaleCard(String label, String value, IconData icon) {
               onSelected: (value) {
                 if (value == 'reset') {
                   _resetToConnectScreen();
-                } else if (value == 'cloud') {
-                  _refreshDataFromCloud();
                 } else if (value == 'edit') {
                   _showQuickEditDialog(context);
                 } else if (value == 'effects') {
@@ -2063,16 +1716,6 @@ Widget _buildScaleCard(String label, String value, IconData icon) {
     ],
   ),
 ),
-//                  PopupMenuItem(
-//                   value: 'cloud',
-//                   child: Row(
-//                     children: [
-//                       const Icon(Icons.cloud_download_outlined, color: Color(0xFF0284C7), size: 20),
-//                       const SizedBox(width: 10),
-// Text(_isEn ? 'Sync Cloud Data' : 'Đồng bộ dữ liệu Cloud'),
-//                     ],
-//                   ),
-//                 ),
                  PopupMenuItem(
                   value: 'edit',
                   child: Row(

@@ -8,7 +8,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
-// import 'package:web_socket_channel/io.dart';
 import '../widgets/dynamic_image.dart'; // 🟢 Dùng DynamicImage widget đa nền tảng
 import 'master_control_screen.dart';
 import '../services/firmware_service.dart';
@@ -35,19 +34,14 @@ class _ConnectScreenState extends State<ConnectScreen> {
   String _bgImagePath = 'assets/images/background.png';
   String? localDownloadedBinPath;
   bool _isOTAUploading = false;
-  // 🟢 Giữ nguyên khai báo biến (KHÔNG thêm final vì giá trị sẽ thay đổi linh hoạt)
   WsConnectionStatus _status = WsConnectionStatus.disconnected;
-  // 🟢 BỔ SUNG CÁC BIẾN MỚI CHO CLOUD & OTA:
   bool _isSyncingCloud = false;
   String _cloudSyncMessage = '';
-  // Map<String, dynamic> _cloudProjectInfo = {};
   @override
   void initState() {
     super.initState();
-    // 🟢 Tự động kiểm tra ESP32 ngay khi mở màn hình
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkInitialConnection();
-      // 2. Tự động đồng bộ dữ liệu Cloud mới nhất ngầm
     _autoSyncCloudOnLaunch();
     });
     if (widget.autoConnectIp != null && widget.autoConnectIp!.isNotEmpty) {
@@ -59,14 +53,12 @@ class _ConnectScreenState extends State<ConnectScreen> {
   }
   Future<void> _autoSyncCloudOnLaunch({bool isManual = false}) async {
   if (_isSyncingCloud) return;
-
   setState(() {
     _isSyncingCloud = true;
     _cloudSyncMessage = _selectedLang == 'vi'
         ? 'Đang đồng bộ Cloud...'
         : 'Syncing Cloud...';
   });
-
   if (isManual && mounted) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -77,11 +69,9 @@ class _ConnectScreenState extends State<ConnectScreen> {
       ),
     );
   }
-
   final int timestamp = DateTime.now().millisecondsSinceEpoch;
   final String rawGistUrl =
       'https://gist.githubusercontent.com/nguyenvandungvtdt-commits/b3440aa5a5ab9e6e69bb570b389c88cb/raw/config.json?t=$timestamp';
-
   try {
     debugPrint('🚀 [CONNECT_CLOUD] Đang tải JSON từ GitHub Gist...');
     final response = await http.get(
@@ -91,17 +81,11 @@ class _ConnectScreenState extends State<ConnectScreen> {
         'Pragma': 'no-cache',
       },
     ).timeout(const Duration(seconds: 6));
-
     if (response.statusCode == 200) {
       final String rawJsonStr = utf8.decode(response.bodyBytes);
       final Map<String, dynamic> cloudData = jsonDecode(rawJsonStr);
-
-      // 💾 Lưu cấu hình vào Cache Local theo IP
       await ConfigService.saveConfig(_ipController.text.trim(), rawJsonStr);
-
-      // Cập nhật Tên & Ảnh Sa Bàn lên màn hình Connect
       await _parseCloudHeaderInfo(cloudData);
-
       if (mounted) {
         setState(() {
           _isSyncingCloud = false;
@@ -109,7 +93,6 @@ class _ConnectScreenState extends State<ConnectScreen> {
               ? 'Đã đồng bộ Cloud mới nhất'
               : 'Cloud Synced';
         });
-
         if (isManual) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -137,64 +120,19 @@ class _ConnectScreenState extends State<ConnectScreen> {
     }
   }
 }
-
-// Hàm bổ trợ: Parse Tên dự án & Ảnh overview có kiểm tra ưu tiên Cache
-// Future<void> _parseCloudHeaderInfo(Map<String, dynamic> raw) async {
-//   final prefs = await SharedPreferences.getInstance();
-//   // _cloudProjectInfo = raw['project_info'] ?? {};
-
-//   String? savedProjectName = prefs.getString('saved_project_name');
-//   String cloudProjectName = raw['project_info']?['name'] ?? raw['p'] ?? 'SA BÀN THÔNG MINH';
-
-//   String finalName = (savedProjectName != null && savedProjectName.isNotEmpty)
-//       ? savedProjectName
-//       : cloudProjectName;
-
-//   String cloudOverviewImg = raw['assets']?['overview'] ?? 'assets/images/background.png';
-//   String? lastCloudImg = prefs.getString('last_cloud_overview_image');
-//   String? savedLocalImage = prefs.getString('saved_overview_image');
-//   String finalImg;
-
-//   if (lastCloudImg != null && lastCloudImg != cloudOverviewImg) {
-//     await prefs.remove('saved_overview_image');
-//     await prefs.setString('last_cloud_overview_image', cloudOverviewImg);
-//     finalImg = cloudOverviewImg;
-//   } else if (savedLocalImage != null &&
-//       savedLocalImage.isNotEmpty &&
-//       (kIsWeb || File(savedLocalImage).existsSync())) {
-//     finalImg = savedLocalImage;
-//   } else {
-//     await prefs.setString('last_cloud_overview_image', cloudOverviewImg);
-//     finalImg = cloudOverviewImg;
-//   }
-
-//   if (mounted) {
-//     setState(() {
-//       _appTitle = finalName.toUpperCase();
-//       _bgImagePath = finalImg;
-//     });
-//   }
-// }
 Future<void> _parseCloudHeaderInfo(Map<String, dynamic> raw) async {
   final prefs = await SharedPreferences.getInstance();
-
-  // 1. Tên Dự Án (Ưu tiên tên đã chỉnh sửa riêng ở máy local)
   String? savedProjectName = prefs.getString('saved_connect_title');
   String cloudProjectName =
       raw['project_info']?['name'] ?? raw['p'] ?? 'SA BÀN THÔNG MINH';
-
   String finalName = (savedProjectName != null && savedProjectName.isNotEmpty)
       ? savedProjectName
       : cloudProjectName;
-
-  // 2. Ảnh Banner Connect Screen (Lấy đúng key 'background' từ Cloud)
   String cloudBackgroundImg =
       raw['assets']?['background'] ?? 'assets/images/background.png';
   String? lastCloudImg = prefs.getString('last_cloud_connect_bg');
   String? savedLocalImage = prefs.getString('saved_connect_bg');
   String finalImg;
-
-  // Tự động cập nhật nếu Cloud có thay đổi ảnh background mới
   if (lastCloudImg != null && lastCloudImg != cloudBackgroundImg) {
     await prefs.remove('saved_connect_bg');
     await prefs.setString('last_cloud_connect_bg', cloudBackgroundImg);
@@ -207,7 +145,6 @@ Future<void> _parseCloudHeaderInfo(Map<String, dynamic> raw) async {
     await prefs.setString('last_cloud_connect_bg', cloudBackgroundImg);
     finalImg = cloudBackgroundImg;
   }
-
   if (mounted) {
     setState(() {
       _appTitle = finalName.toUpperCase();
@@ -215,12 +152,8 @@ Future<void> _parseCloudHeaderInfo(Map<String, dynamic> raw) async {
     });
   }
 }
-
-// Hàm đọc Cache local khi không có mạng Internet
-// Trong connect_screen.dart:
 Future<void> _loadLocalCachedConfig() async {
   try {
-    // 🟢 Sửa ConfigService.getConfig thành ConfigService.getSavedJsonConfig()
     final cachedJson = await ConfigService.getSavedJsonConfig();
     if (cachedJson != null && cachedJson.isNotEmpty) {
       final Map<String, dynamic> localData = jsonDecode(cachedJson);
@@ -636,12 +569,6 @@ Future<void> _loadLocalCachedConfig() async {
         .replaceAll('http://', '')
         .replaceAll('https://', '')
         .replaceAll('/', '');
-    if (cleanAddress.contains('.local')) {
-      debugPrint(
-        '[DEBUG_CONN] ⚠️ Phát hiện mDNS .local, tự động chuyển về IP LAN: 192.168.0.200',
-      );
-      cleanAddress = '192.168.0.200';
-    }
     Uri wsUrl;
     if (isCloudDemo) {
       if (cleanAddress.contains(':')) {
@@ -1044,174 +971,9 @@ Future<void> _loadLocalCachedConfig() async {
                         ),
                       ],
                     ),
-                    // child: Column(
-                    //   mainAxisSize: MainAxisSize.min,
-                    //   children: [
-                    //     Row(
-                    //       mainAxisAlignment: MainAxisAlignment.center,
-                    //       children: [
-                    //         const Icon(
-                    //           Icons.tune_rounded,
-                    //           color: Color(0xFF0369A1),
-                    //           size: 20,
-                    //         ),
-                    //         const SizedBox(width: 8),
-                    //         Flexible(
-                    //           child: Text(
-                    //             _appTitle,
-                    //             textAlign: TextAlign.center,
-                    //             style: const TextStyle(
-                    //               fontSize: 14,
-                    //               fontWeight: FontWeight.bold,
-                    //               color: Color(0xFF0369A1),
-                    //               letterSpacing: 0.8,
-                    //             ),
-                    //           ),
-                    //         ),
-                    //       ],
-                    //     ),
-                    //     const SizedBox(height: 14),
-                    //     TextField(
-                    //       controller: _ipController,
-                    //       keyboardType: TextInputType.url,
-                    //       style: const TextStyle(
-                    //         fontSize: 15,
-                    //         fontWeight: FontWeight.bold,
-                    //         color: Color(0xFF0F172A),
-                    //       ),
-                    //       decoration: InputDecoration(
-                    //         labelText: _selectedLang == 'vi'
-                    //             ? 'Địa chỉ IP / Server Sa bàn'
-                    //             : 'IP Address / Model Server',
-                    //         labelStyle: const TextStyle(
-                    //           color: Color(0xFF0369A1),
-                    //           fontSize: 13,
-                    //         ),
-                    //         hintText: _selectedLang == 'vi'
-                    //             ? 'Ví dụ: saban-dongvancong.local hoặc saban-demo.onrender.com'
-                    //             : 'e.g., saban-dongvancong.local or saban-demo.onrender.com',
-                    //         prefixIcon: const Icon(
-                    //           Icons.wifi_rounded,
-                    //           color: Color(0xFF0284C7),
-                    //           size: 20,
-                    //         ),
-                    //         contentPadding: const EdgeInsets.symmetric(
-                    //           vertical: 12,
-                    //           horizontal: 16,
-                    //         ),
-                    //         filled: true,
-                    //         fillColor: const Color(0xFFF0F9FF),
-                    //         enabledBorder: OutlineInputBorder(
-                    //           borderRadius: BorderRadius.circular(12),
-                    //           borderSide: const BorderSide(
-                    //             color: Color(0xFFBAE6FD),
-                    //             width: 1.2,
-                    //           ),
-                    //         ),
-                    //         focusedBorder: OutlineInputBorder(
-                    //           borderRadius: BorderRadius.circular(12),
-                    //           borderSide: const BorderSide(
-                    //             color: Color(0xFF0284C7),
-                    //             width: 2,
-                    //           ),
-                    //         ),
-                    //       ),
-                    //     ),
-                    //     const SizedBox(height: 14),
-                    //     SizedBox(
-                    //       width: double.infinity,
-                    //       height: 48,
-                    //       child: InkWell(
-                    //         onTap: _isLoading ? null : _connect,
-                    //         borderRadius: BorderRadius.circular(12),
-                    //         child: AnimatedContainer(
-                    //           duration: const Duration(milliseconds: 200),
-                    //           decoration: BoxDecoration(
-                    //             gradient: _isLoading
-                    //                 ? const LinearGradient(
-                    //                     colors: [
-                    //                       Color(0xFF94A3B8),
-                    //                       Color(0xFF64748B),
-                    //                     ],
-                    //                   )
-                    //                 : const LinearGradient(
-                    //                     colors: [
-                    //                       Color(0xFF0284C7),
-                    //                       Color(0xFF0369A1),
-                    //                     ],
-                    //                     begin: Alignment.topLeft,
-                    //                     end: Alignment.bottomRight,
-                    //                   ),
-                    //             borderRadius: BorderRadius.circular(12),
-                    //             boxShadow: [
-                    //               BoxShadow(
-                    //                 color: const Color(0xFF0284C7)
-                    //                     .withValues(alpha: 0.3),
-                    //                 blurRadius: 12,
-                    //                 offset: const Offset(0, 4),
-                    //               ),
-                    //             ],
-                    //           ),
-                    //           child: Center(
-                    //             child: _isLoading
-                    //                 ? Row(
-                    //                     mainAxisAlignment:
-                    //                         MainAxisAlignment.center,
-                    //                     children: [
-                    //                       const SizedBox(
-                    //                         width: 18,
-                    //                         height: 18,
-                    //                         child: CircularProgressIndicator(
-                    //                           color: Colors.white,
-                    //                           strokeWidth: 2,
-                    //                         ),
-                    //                       ),
-                    //                       const SizedBox(width: 10),
-                    //                       Text(
-                    //                         _selectedLang == 'vi'
-                    //                             ? 'Đang kết nối, vui lòng chờ chút ạ!'
-                    //                             : 'Connecting, please wait...',
-                    //                         style: const TextStyle(
-                    //                           color: Colors.white,
-                    //                           fontWeight: FontWeight.bold,
-                    //                           fontSize: 14,
-                    //                         ),
-                    //                       ),
-                    //                     ],
-                    //                   )
-                    //                 : Row(
-                    //                     mainAxisAlignment:
-                    //                         MainAxisAlignment.center,
-                    //                     children: [
-                    //                       const Icon(
-                    //                         Icons.power_settings_new_rounded,
-                    //                         color: Colors.white,
-                    //                         size: 18,
-                    //                       ),
-                    //                       const SizedBox(width: 8),
-                    //                       Text(
-                    //                         _selectedLang == 'vi'
-                    //                             ? 'KẾT NỐI VÀ TẢI SA BÀN'
-                    //                             : 'CONNECT & LOAD SCALE MODEL',
-                    //                         style: const TextStyle(
-                    //                           color: Colors.white,
-                    //                           fontSize: 14,
-                    //                           fontWeight: FontWeight.bold,
-                    //                           letterSpacing: 0.8,
-                    //                         ),
-                    //                       ),
-                    //                     ],
-                    //                   ),
-                    //           ),
-                    //         ),
-                    //       ),
-                    //     ),
-                    //   ],
-                    // ),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // 1️⃣ Dòng Tiêu đề Màn hình
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
@@ -1236,9 +998,6 @@ Future<void> _loadLocalCachedConfig() async {
                           ],
                         ),
                         const SizedBox(height: 12),
-                        // 🟢 2. CẠC BADGE THÔNG MINH HIỂN THỊ TRẠNG THÁI KẾT NỐI (ĐỎ/VÀNG/XANH)
-                        // _buildConnectionBadge(),
-                        // 🟢 2. CẠC BADGE THÔNG MINH HIỂN THỊ TRẠNG THÁI KẾT NỐI (ESP32 + CLOUD)
   Row(
     mainAxisAlignment: MainAxisAlignment.center,
     children: [
@@ -1248,8 +1007,6 @@ Future<void> _loadLocalCachedConfig() async {
     ],
   ),
   const SizedBox(height: 14),
-                        // const SizedBox(height: 14),
-                        // 3️⃣ Ô Nhập Địa chỉ IP / Server
                         TextField(
                           controller: _ipController,
                           keyboardType: TextInputType.url,
@@ -1297,7 +1054,6 @@ Future<void> _loadLocalCachedConfig() async {
                           ),
                         ),
                         const SizedBox(height: 14),
-                        // 4️⃣ Nút Bấm Kết Nối & Tải Sa Bàn
                         SizedBox(
                           width: double.infinity,
                           height: 48,
@@ -1477,7 +1233,6 @@ Future<void> _loadLocalCachedConfig() async {
               ),
               onSelected: (value) {
                 if (value == 'sync_cloud') {
-    // 🟢 Gọi hàm đồng bộ Cloud thủ công khi người dùng chọn menu
     _autoSyncCloudOnLaunch(isManual: true);
   }
                else if (value == 'demo_mode') {
@@ -1501,7 +1256,6 @@ Future<void> _loadLocalCachedConfig() async {
                 }
               },
               itemBuilder: (BuildContext context) => [
-                // 🟢 BỔ SUNG MỤC ĐỒNG BỘ CLOUD VÀO ĐÂY
   PopupMenuItem(
     value: 'sync_cloud',
     child: Row(
@@ -1811,24 +1565,126 @@ Future<void> _loadLocalCachedConfig() async {
       ),
     );
   }
-  // 🟢 Hàm ngầm kiểm tra kết nối khi mở App
-  // 🟢 1. Hàm kiểm tra ngầm khi mở màn hình (Chỉ thử kết nối nhẹ ngầm)
+// Future<void> _checkInitialConnection() async {
+//   if (_isLoading || _status == WsConnectionStatus.connecting) return;
+//   if (mounted) {
+//     setState(() {
+//       _status = WsConnectionStatus.connecting; // 🟡 Chuyển Vàng: Đang dò ESP32
+//     });
+//   }
+//   String rawInput = _ipController.text.trim();
+//   if (rawInput.isEmpty) rawInput = 'saban-dongvancong.local';
+//   final cleanHost = rawInput.replaceAll(RegExp(r'https?://|ws://'), '').replaceAll('/', '');
+//   final List<String> hostsToTry = [cleanHost];
+//   if (cleanHost != '192.168.0.200') {
+//     hostsToTry.add('192.168.0.200'); // Backup IP tĩnh nếu mDNS thất bại
+//   }
+//   bool connected = false;
+//   for (String host in hostsToTry) {
+//     if (connected) break;
+//     try {
+//       debugPrint('🔍 [STATUS_CHECK] Thử kết nối tới: ws://$host:81');
+//       final uri = Uri.parse('ws://$host:81');
+//       final channel = WebSocketChannel.connect(uri);
+//       await channel.ready.timeout(const Duration(seconds: 2));
+//       final stream = channel.stream.asBroadcastStream();
+//       final sub = stream.listen((message) {
+//         if (!connected && mounted) {
+//           connected = true;
+//           debugPrint('🟢 [STATUS_CHECK] Thành công kết nối qua: $host -> CHUYỂN XANH!');
+//           setState(() {
+//             _status = WsConnectionStatus.connected; // 🟢 Báo Xanh ngay!
+//           });
+//         }
+//         channel.sink.close();
+//       });
+//       await Future.delayed(const Duration(milliseconds: 300));
+//       await sub.cancel();
+//     } catch (e) {
+//       debugPrint('⚠️ [STATUS_CHECK] Không kết nối được tới $host: $e');
+//     }
+//   }
+//   if (!connected && mounted) {
+//     debugPrint('🔴 [STATUS_CHECK] Thất bại toàn bộ phương án kết nối -> Báo Đỏ.');
+//     setState(() {
+//       _status = WsConnectionStatus.disconnected; // 🔴 Chuyển Đỏ
+//     });
+//   }
+// }
+// Future<void> _checkInitialConnection() async {
+//   if (_isLoading || _status == WsConnectionStatus.connecting) return;
+//   if (mounted) {
+//     setState(() {
+//       _status = WsConnectionStatus.connecting; // 🟡 Chuyển Vàng
+//     });
+//   }
+
+//   String rawInput = _ipController.text.trim();
+//   if (rawInput.isEmpty) rawInput = 'saban-dongvancong.local';
+
+//   final cleanHost = rawInput.replaceAll(RegExp(r'https?://|ws://'), '').replaceAll('/', '');
+
+//   // 🟢 Danh sách ưu tiên kết nối: Tên miền mDNS -> IP đã lưu trong máy
+//   final prefs = await SharedPreferences.getInstance();
+//   String? savedIp = prefs.getString('saved_ip');
+
+//   final List<String> hostsToTry = [cleanHost];
+//   if (savedIp != null && savedIp.isNotEmpty && !hostsToTry.contains(savedIp)) {
+//     hostsToTry.add(savedIp);
+//   }
+
+//   bool connected = false;
+//   for (String host in hostsToTry) {
+//     if (connected) break;
+//     try {
+//       debugPrint('🔍 [STATUS_CHECK] Thử kết nối tới: ws://$host:81');
+//       final uri = Uri.parse('ws://$host:81');
+//       final channel = WebSocketChannel.connect(uri);
+
+//       await channel.ready.timeout(const Duration(seconds: 2));
+
+//       if (mounted) {
+//         connected = true;
+//         debugPrint('🟢 [STATUS_CHECK] Thành công kết nối qua: $host -> CHUYỂN XANH!');
+//         setState(() {
+//           _status = WsConnectionStatus.connected; // 🟢 Báo Xanh!
+//         });
+//       }
+//       await channel.sink.close();
+//     } catch (e) {
+//       debugPrint('⚠️ [STATUS_CHECK] Không kết nối được tới $host: $e');
+//     }
+//   }
+
+//   if (!connected && mounted) {
+//     debugPrint('🔴 [STATUS_CHECK] Thất bại toàn bộ phương án kết nối -> Báo Đỏ.');
+//     setState(() {
+//       _status = WsConnectionStatus.disconnected; // 🔴 Chuyển Đỏ
+//     });
+//   }
+// }
 Future<void> _checkInitialConnection() async {
   if (_isLoading || _status == WsConnectionStatus.connecting) return;
   if (mounted) {
     setState(() {
-      _status = WsConnectionStatus.connecting; // 🟡 Chuyển Vàng: Đang dò ESP32
+      _status = WsConnectionStatus.connecting; // 🟡 Chuyển Vàng
     });
   }
+
   String rawInput = _ipController.text.trim();
   if (rawInput.isEmpty) rawInput = 'saban-dongvancong.local';
-  // Lọc sạch prefix http/ws nếu người dùng lỡ nhập
+
   final cleanHost = rawInput.replaceAll(RegExp(r'https?://|ws://'), '').replaceAll('/', '');
-  // Danh sách địa chỉ cần dò: Ưu tiên Host nhập vào trước, sau đó tới IP tĩnh dự phòng
+
+  // 🟢 Danh sách ưu tiên kết nối: Host nhập vào -> IP đã lưu trong máy
+  final prefs = await SharedPreferences.getInstance();
+  String? savedIp = prefs.getString('saved_ip');
+
   final List<String> hostsToTry = [cleanHost];
-  if (cleanHost != '192.168.0.200') {
-    hostsToTry.add('192.168.0.200'); // Backup IP tĩnh nếu mDNS thất bại
+  if (savedIp != null && savedIp.isNotEmpty && !hostsToTry.contains(savedIp)) {
+    hostsToTry.add(savedIp);
   }
+
   bool connected = false;
   for (String host in hostsToTry) {
     if (connected) break;
@@ -1836,29 +1692,29 @@ Future<void> _checkInitialConnection() async {
       debugPrint('🔍 [STATUS_CHECK] Thử kết nối tới: ws://$host:81');
       final uri = Uri.parse('ws://$host:81');
       final channel = WebSocketChannel.connect(uri);
-      // Đặt timeout 2 giây cho mỗi phương án dò
-      await channel.ready.timeout(const Duration(seconds: 2));
-      // Lắng nghe tín hiệu phản hồi
-      final stream = channel.stream.asBroadcastStream();
-      final sub = stream.listen((message) {
-        if (!connected && mounted) {
-          connected = true;
-          debugPrint('🟢 [STATUS_CHECK] Thành công kết nối qua: $host -> CHUYỂN XANH!');
-          setState(() {
-            _status = WsConnectionStatus.connected; // 🟢 Báo Xanh ngay!
-          });
-        }
-        channel.sink.close();
-      });
-      // Cho phép ngắt kết nối kiểm tra sau khi xác nhận
-      await Future.delayed(const Duration(milliseconds: 300));
-      await sub.cancel();
+
+      // 🟢 CHỈNH TIMEOUT THÔNG MINH:
+      // Tên miền .local cần 5s cho Android/iOS tìm IP; Nếu là IP tĩnh/numeric thì chỉ cần 2s.
+      final int timeoutSeconds = host.endsWith('.local') ? 5 : 2;
+      await channel.ready.timeout(Duration(seconds: timeoutSeconds));
+
+      if (mounted) {
+        connected = true;
+        debugPrint('🟢 [STATUS_CHECK] Thành công kết nối qua: $host -> CHUYỂN XANH!');
+        
+        // 🟢 Cập nhật lại IP/Host thành công gần nhất vào Cache
+        await prefs.setString('saved_ip', host);
+
+        setState(() {
+          _status = WsConnectionStatus.connected; // 🟢 Báo Xanh!
+        });
+      }
+      await channel.sink.close();
     } catch (e) {
       debugPrint('⚠️ [STATUS_CHECK] Không kết nối được tới $host: $e');
-      // Tự động chuyển sang host tiếp theo trong danh sách hostsToTry
     }
   }
-  // Nếu đã thử tất cả địa chỉ mà vẫn thất bại
+
   if (!connected && mounted) {
     debugPrint('🔴 [STATUS_CHECK] Thất bại toàn bộ phương án kết nối -> Báo Đỏ.');
     setState(() {
@@ -1870,7 +1726,6 @@ Future<void> _checkInitialConnection() async {
     Color color;
     String text;
     IconData icon;
-    // 🟢 Bỏ nhánh 'default:' vì Switch đã bao phủ 100% các giá trị của Enum
     switch (_status) {
       case WsConnectionStatus.connected:
         color = const Color(0xFF16A34A); // Xanh lá
