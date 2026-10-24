@@ -63,6 +63,33 @@ class _MasterControlScreenState extends State<MasterControlScreen> {
   double _sineSpeed = 60;
   void Function(String)? _onModeChangedFromHardware;
   VoidCallback? _onConfigReloadedFromCloud;
+  int _getTotalHardwareLedsCount() {
+  // 1. Kiểm tra nếu _ledStates đã có sẵn các LED index
+  int maxIdx = -1;
+  if (_ledStates.isNotEmpty) {
+    for (var key in _ledStates.keys) {
+      if (key > maxIdx) maxIdx = key;
+    }
+  }
+
+  // 2. Nếu quét qua _buildings tìm max index
+  for (var b in _buildings) {
+    for (var f in (b['floors'] as List? ?? [])) {
+      for (var r in (f['rooms'] as List? ?? [])) {
+        int ledIdx = int.tryParse(r['led_index']?.toString() ?? '') ?? -1;
+        if (ledIdx > maxIdx) maxIdx = ledIdx;
+      }
+    }
+  }
+
+  // Nếu tìm thấy index lớn nhất (ví dụ 344), tổng số LED sẽ là 345 (từ 0 đến 344)
+  if (maxIdx >= 0) {
+    return maxIdx + 1;
+  }
+
+  // 3. Mặc định dự phòng cho Sa bàn của bạn là 345 LED
+  return 345; 
+}
 Timer? _pingTimer;
 void _startPingTimer() {
   _pingTimer?.cancel();
@@ -80,12 +107,151 @@ void _startPingTimer() {
     }
   });
 }
-@override
+// @override
+// @override
+// void initState() {
+//   super.initState();
+//   // isConnected = true;
+//   // _ledStates = Map<int, bool>.from(widget.ledStates);
+  
+//   Map<String, dynamic>? configToUse = widget.configData;
+//   if (configToUse != null &&
+//       (configToUse.containsKey('d') ||
+//           configToUse.containsKey('ui_config') ||
+//           configToUse.containsKey('buildings'))) {
+//     _dynamicUiConfig = configToUse['ui_config'] ?? {};
+//     _parseConfigMap(configToUse);
+//     if (mounted) setState(() => _isLoaded = true);
+//   } else if (widget.cachedJson != null && widget.cachedJson!.isNotEmpty) {
+//     _parseFlatJson(widget.cachedJson!, isFromCache: true);
+//     if (mounted) setState(() => _isLoaded = true);
+//   } else {
+//     _loadConfigFromLocalCache();
+//   }
+//   if (mounted) {
+//     setState(() {
+//       _isLoaded = true;
+//     });
+//   }
+//   try {
+//     _wsSubscription = widget.channel.stream.listen(
+//       (data) {
+//         if (!isConnected && mounted) {
+//           setState(() => isConnected = true);
+//         }
+//         String message = data.toString().trim();
+//         if (message.startsWith('MODE:')) {
+//           String activeCmd = message.substring(5).trim();
+//           if (mounted) {
+//             setState(() {
+//               _activeEffect = activeCmd;
+//             });
+//             if (_onModeChangedFromHardware != null) {
+//               _onModeChangedFromHardware!(activeCmd);
+//             }
+//           }
+//         } 
+//         // else if (message.startsWith('SYNCALL11:')) {
+//         //   _parseSyncAll11(message);
+//         // } 
+//         else if (message.startsWith('TYPE:')) {
+//           final parts = message.split(':');
+//           if (parts.length >= 3) {
+//             final int targetType = int.tryParse(parts[1].trim()) ?? -1;
+//             final bool isOn = parts[2].trim() == '1';
+//             if (targetType != -1 && mounted) {
+//               setState(() {
+//                 for (var b in _buildings) {
+//                   for (var f in (b['floors'] as List? ?? [])) {
+//                     for (var r in (f['rooms'] as List? ?? [])) {
+//                       int rType = int.tryParse(r['room_type'].toString()) ?? -1;
+//                       int ledIdx = int.tryParse(r['led_index'].toString()) ?? -1;
+//                       if (rType == targetType && ledIdx != -1) {
+//                         _ledStates[ledIdx] = isOn;
+//                       }
+//                     }
+//                   }
+//                 }
+//               });
+//             }
+//           }
+//         } 
+//         else if (message.startsWith('ALL:')) {
+//           final parts = message.split(':');
+//           if (parts.length >= 2) {
+//             final bool isOn = parts[1].trim() == '1';
+//             if (mounted) {
+//               setState(() {
+//                 if (parts.length >= 3 && parts[2].trim().isNotEmpty) {
+//                   final Set<int> targetIds = parts[2]
+//                       .split(',')
+//                       .map((e) => int.tryParse(e.trim()) ?? -1)
+//                       .where((id) => id != -1)
+//                       .toSet();
+//                   for (var id in targetIds) {
+//                     _ledStates[id] = isOn;
+//                   }
+//                 } else {
+//                   _ledStates.updateAll((key, value) => isOn);
+//                 }
+//               });
+//             }
+//           }
+//         } 
+//         else if (message.startsWith('{')) {
+//           try {
+//             final Map<String, dynamic> msgJson = jsonDecode(message);
+//             if (msgJson.containsKey('status') && msgJson.containsKey('device')) {
+//               return;
+//             }
+//             if (msgJson.containsKey('d') ||
+//                 msgJson.containsKey('buildings') ||
+//                 msgJson.containsKey('ui_config')) {
+//               _dynamicUiConfig = msgJson['ui_config'] ?? {};
+//               _parseConfigMap(msgJson);
+//             } else {
+//               _parseFlatJson(message, isFromCache: false);
+//             }
+//           } catch (e) {
+//             debugPrint("Lỗi parse JSON WebSocket: $e");
+//           }
+//         } 
+//         else if (message.contains(':')) {
+//           final parts = message.split(':');
+//           if (parts.length == 2) {
+//             final int? hwIndex = int.tryParse(parts[0].trim());
+//             final bool isOn = parts[1].trim() == '1';
+//             if (hwIndex != null && mounted) {
+//               setState(() {
+//                 _ledStates[hwIndex] = isOn;
+//               });
+//             }
+//           }
+//         }
+//       },
+//       onError: (err) {
+//         debugPrint("❌ [WS STREAM ERROR]: $err");
+//         if (mounted) _handleDisconnection();
+//       },
+//       onDone: () {
+//         debugPrint("⚠️ [WS STREAM DONE]");
+//         if (mounted) _handleDisconnection();
+//       },
+//       cancelOnError: false,
+//     );
+//   } catch (e) {
+//     debugPrint("⚠️ WebSocket Stream đã được nghe từ trước: $e");
+//   }
+//   _startPingTimer();
+// }
 @override
 void initState() {
   super.initState();
+  
+  // 1. Khôi phục khởi tạo trạng thái kết nối và Map trạng thái LED
   isConnected = true;
   _ledStates = Map<int, bool>.from(widget.ledStates);
+
   Map<String, dynamic>? configToUse = widget.configData;
   if (configToUse != null &&
       (configToUse.containsKey('d') ||
@@ -100,11 +266,16 @@ void initState() {
   } else {
     _loadConfigFromLocalCache();
   }
+
+  // 🟢 2. Khởi tạo ĐỘNG toàn bộ ID LED xuất hiện trong cấu hình (không gán cứng 345)
+  _ensureAllLedStatesInitialized();
+
   if (mounted) {
     setState(() {
       _isLoaded = true;
     });
   }
+
   try {
     _wsSubscription = widget.channel.stream.listen(
       (data) {
@@ -122,9 +293,6 @@ void initState() {
               _onModeChangedFromHardware!(activeCmd);
             }
           }
-        } 
-        else if (message.startsWith('SYNCALL11:')) {
-          _parseSyncAll11(message);
         } 
         else if (message.startsWith('TYPE:')) {
           final parts = message.split(':');
@@ -155,11 +323,8 @@ void initState() {
             if (mounted) {
               setState(() {
                 if (parts.length >= 3 && parts[2].trim().isNotEmpty) {
-                  final Set<int> targetIds = parts[2]
-                      .split(',')
-                      .map((e) => int.tryParse(e.trim()) ?? -1)
-                      .where((id) => id != -1)
-                      .toSet();
+                  // 🟢 3. Giải mã dải nén dạng Range (ví dụ: "8-68,77-137,200") khi nhận phản hồi từ WebSocket
+                  final Set<int> targetIds = _parseCompressedIds(parts[2].trim());
                   for (var id in targetIds) {
                     _ledStates[id] = isOn;
                   }
@@ -181,8 +346,10 @@ void initState() {
                 msgJson.containsKey('ui_config')) {
               _dynamicUiConfig = msgJson['ui_config'] ?? {};
               _parseConfigMap(msgJson);
+              _ensureAllLedStatesInitialized(); // Cập nhật lại danh sách LED nếu JSON thay đổi
             } else {
               _parseFlatJson(message, isFromCache: false);
+              _ensureAllLedStatesInitialized();
             }
           } catch (e) {
             debugPrint("Lỗi parse JSON WebSocket: $e");
@@ -215,6 +382,54 @@ void initState() {
     debugPrint("⚠️ WebSocket Stream đã được nghe từ trước: $e");
   }
   _startPingTimer();
+}
+
+// 🟢 HAM 1: Đọc động toàn bộ LED index có trong sa bàn để khởi tạo _ledStates
+void _ensureAllLedStatesInitialized() {
+  int maxIndex = -1;
+  for (var b in _buildings) {
+    for (var f in (b['floors'] as List? ?? [])) {
+      for (var r in (f['rooms'] as List? ?? [])) {
+        int ledIdx = int.tryParse(r['led_index'].toString()) ?? -1;
+        if (ledIdx != -1) {
+          _ledStates.putIfAbsent(ledIdx, () => false);
+          if (ledIdx > maxIndex) maxIndex = ledIdx;
+        }
+      }
+    }
+  }
+  
+  // Trường hợp dự phòng nếu map bị trống, tạo tối thiểu theo maxIndex tìm được
+  if (maxIndex >= 0) {
+    for (int i = 0; i <= maxIndex; i++) {
+      _ledStates.putIfAbsent(i, () => false);
+    }
+  }
+}
+
+// 🟢 HÀM 2: Giải mã chuỗi dải nén "8-68,77-137,200" thành Set<int>
+Set<int> _parseCompressedIds(String rawIdsStr) {
+  final Set<int> result = {};
+  final tokens = rawIdsStr.split(',');
+  for (var token in tokens) {
+    final cleanToken = token.trim();
+    if (cleanToken.contains('-')) {
+      final rangeParts = cleanToken.split('-');
+      if (rangeParts.length == 2) {
+        final int start = int.tryParse(rangeParts[0].trim()) ?? -1;
+        final int end = int.tryParse(rangeParts[1].trim()) ?? -1;
+        if (start != -1 && end != -1 && start <= end) {
+          for (int i = start; i <= end; i++) {
+            result.add(i);
+          }
+        }
+      }
+    } else {
+      final int id = int.tryParse(cleanToken) ?? -1;
+      if (id != -1) result.add(id);
+    }
+  }
+  return result;
 }
 @override
 void dispose() {
@@ -271,25 +486,25 @@ Future<void> _loadConfigFromLocalCache() async {
       debugPrint('Lỗi gửi lệnh mô-tơ: $e');
     }
   }
-void _parseSyncAll11(String message) {
-  try {
-    debugPrint("📥 [WS RECV SYNCALL11]: $message");
-    int pipeIndex = message.indexOf('|');
-    if (pipeIndex == -1) return;
-    String statesData = message.substring(pipeIndex + 1).trim();
-    List<String> states = statesData.split(',');
-    if (mounted) {
-      setState(() {
-        for (int i = 0; i < states.length; i++) {
-          _ledStates[i] = (states[i].trim() == '1');
-        }
-      });
-      debugPrint("✅ [SYNC ALL SUCCESS]: Đã cập nhật ${_ledStates.length} trạng thái LED");
-    }
-  } catch (e) {
-    debugPrint("❌ [SYNC ALL ERROR]: Lỗi Parse SYNCALL11: $e");
-  }
-}
+// void _parseSyncAll11(String message) {
+//   try {
+//     debugPrint("📥 [WS RECV SYNCALL11]: $message");
+//     int pipeIndex = message.indexOf('|');
+//     if (pipeIndex == -1) return;
+//     String statesData = message.substring(pipeIndex + 1).trim();
+//     List<String> states = statesData.split(',');
+//     if (mounted) {
+//       setState(() {
+//         for (int i = 0; i < states.length; i++) {
+//           _ledStates[i] = (states[i].trim() == '1');
+//         }
+//       });
+//       debugPrint("✅ [SYNC ALL SUCCESS]: Đã cập nhật ${_ledStates.length} trạng thái LED");
+//     }
+//   } catch (e) {
+//     debugPrint("❌ [SYNC ALL ERROR]: Lỗi Parse SYNCALL11: $e");
+//   }
+// }
 Future<void> _parseConfigMap(Map<String, dynamic> raw) async {
   if (!raw.containsKey('d') && !raw.containsKey('buildings') && !raw.containsKey('ui_config')) {
     debugPrint("⚠️ Bỏ qua _parseConfigMap vì dữ liệu không chứa thông tin sa bàn: ${raw.keys.toList()}");
@@ -523,9 +738,80 @@ void _reconnectWebSocket() async {
   if (!mounted) return;
 }
 bool _isSendingWsCommand = false;
+// void _toggleLedList(List<int> ledIndices, [bool? explicitState]) async {
+//   if (ledIndices.isEmpty || _isSendingWsCommand) return;
+//   _isSendingWsCommand = true;
+//   bool targetState;
+//   if (explicitState != null) {
+//     targetState = explicitState;
+//   } else {
+//     bool areAllOn = ledIndices.every((idx) => _ledStates[idx] == true);
+//     targetState = !areAllOn;
+//   }
+//   debugPrint("🔘 [USER CLICK TOGGLE]: ${ledIndices.length} LEDs -> TargetState: $targetState");
+//   setState(() {
+//     _activeEffect = 'MANUAL';
+//     for (int ledIdx in ledIndices) {
+//       _ledStates[ledIdx] = targetState;
+//     }
+//   });
+//   _sendWsCommand('MODE:MANUAL');
+//   await Future.delayed(const Duration(milliseconds: 30));
+//   String val = targetState ? '1' : '0';
+//   if (ledIndices.length == 1) {
+//     _sendWsCommand('${ledIndices.first}:$val');
+//   } else if (ledIndices.length >= _ledStates.length) {
+//     _sendWsCommand('ALL:$val');
+//   } else {
+//     String idsJoined = ledIndices.join(',');
+//     _sendWsCommand('ALL:$val:$idsJoined');
+//   }
+//   await Future.delayed(const Duration(milliseconds: 150));
+//   _isSendingWsCommand = false;
+// }
+// void _toggleLedList(List<int> ledIndices, [bool? explicitState]) async {
+//   if (ledIndices.isEmpty || _isSendingWsCommand) return;
+//   _isSendingWsCommand = true;
+  
+//   bool targetState;
+//   if (explicitState != null) {
+//     targetState = explicitState;
+//   } else {
+//     bool areAllOn = ledIndices.every((idx) => _ledStates[idx] == true);
+//     targetState = !areAllOn;
+//   }
+  
+//   debugPrint("🔘 [USER CLICK TOGGLE]: ${ledIndices.length} LEDs -> TargetState: $targetState");
+  
+//   setState(() {
+//     _activeEffect = 'MANUAL';
+//     for (int ledIdx in ledIndices) {
+//       _ledStates[ledIdx] = targetState;
+//     }
+//   });
+
+//   _sendWsCommand('MODE:MANUAL');
+//   await Future.delayed(const Duration(milliseconds: 30));
+
+//   String val = targetState ? '1' : '0';
+  
+//   if (ledIndices.length == 1) {
+//     _sendWsCommand('${ledIndices.first}:$val');
+//   } else if (ledIndices.length >= _ledStates.length) {
+//     _sendWsCommand('ALL:$val');
+//   } else {
+//     // 🟢 TỐI ƯU TẠI ĐÂY: Thay join(',') bằng hàm nén dải số _compressLedIndices
+//     String compressedIds = _compressLedIndices(ledIndices);
+//     _sendWsCommand('ALL:$val:$compressedIds');
+//   }
+
+//   await Future.delayed(const Duration(milliseconds: 150));
+//   _isSendingWsCommand = false;
+// }
 void _toggleLedList(List<int> ledIndices, [bool? explicitState]) async {
   if (ledIndices.isEmpty || _isSendingWsCommand) return;
   _isSendingWsCommand = true;
+
   bool targetState;
   if (explicitState != null) {
     targetState = explicitState;
@@ -533,27 +819,69 @@ void _toggleLedList(List<int> ledIndices, [bool? explicitState]) async {
     bool areAllOn = ledIndices.every((idx) => _ledStates[idx] == true);
     targetState = !areAllOn;
   }
+
   debugPrint("🔘 [USER CLICK TOGGLE]: ${ledIndices.length} LEDs -> TargetState: $targetState");
+
   setState(() {
     _activeEffect = 'MANUAL';
     for (int ledIdx in ledIndices) {
       _ledStates[ledIdx] = targetState;
     }
   });
+
   _sendWsCommand('MODE:MANUAL');
   await Future.delayed(const Duration(milliseconds: 30));
+
   String val = targetState ? '1' : '0';
+
+  // 🟢 LẤY TỔNG SỐ LED CHUẨN CỦA PHẦN CỨNG
+  int totalHardwareLeds = _getTotalHardwareLedsCount();
+  
+  debugPrint("📊 [CHECK LED COUNT]: Clicking ${ledIndices.length} / Total Hardware LEDs: $totalHardwareLeds");
+
   if (ledIndices.length == 1) {
     _sendWsCommand('${ledIndices.first}:$val');
-  } else if (ledIndices.length >= _ledStates.length) {
+  } 
+  // 🟢 BẮT BỘC: Chỉ gửi ALL:1 khi danh sách gửi đi BẰNG HOẶC LỚN HƠN Tổng LED Phần Cứng
+  else if (ledIndices.length >= totalHardwareLeds) { 
     _sendWsCommand('ALL:$val');
-  } else {
-    String idsJoined = ledIndices.join(',');
-    _sendWsCommand('ALL:$val:$idsJoined');
+  } 
+  else {
+    // Luôn đi vào nhánh nén dải số cho các nút chức năng/tiện ích
+    String compressedIds = _compressLedIndices(ledIndices);
+    _sendWsCommand('ALL:$val:$compressedIds');
   }
+
   await Future.delayed(const Duration(milliseconds: 150));
   _isSendingWsCommand = false;
 }
+
+// 🟢 2. HÀM NÉN DẢI SỐ (Tối ưu chuỗi từ 0,1,2,3... thành 0-3)
+// 🟢 Giữ lại duy nhất 1 hàm này bên trong State Class
+String _compressLedIndices(List<int> indices) {
+  if (indices.isEmpty) return "";
+  
+  List<int> sorted = List.from(indices)..sort();
+  List<String> parts = [];
+  
+  int start = sorted[0];
+  int end = sorted[0];
+
+  for (int i = 1; i < sorted.length; i++) {
+    if (sorted[i] == end + 1) {
+      end = sorted[i];
+    } else {
+      parts.add(start == end ? "$start" : "$start-$end");
+      start = sorted[i];
+      end = sorted[i];
+    }
+  }
+  parts.add(start == end ? "$start" : "$start-$end");
+  
+  return parts.join(',');
+}
+
+// 🟢 3. HÀM TÍNH TỔNG SỐ LED DỰ PHÒNG TỪ CONFIG
 WebSocketChannel get _activeChannel => _channel ?? widget.channel;
 void _sendWsCommand(String cmd) {
   try {
