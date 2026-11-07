@@ -1,95 +1,97 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 class DynamicImage extends StatelessWidget {
   final String imagePath;
   final BoxFit fit;
   final String fallbackAsset;
   final Alignment alignment;
+  final double borderRadius;
+  final bool gaplessPlayback; // 🟢 Bổ sung cờ chống nháy đệm RAM
   const DynamicImage({
     super.key,
     required this.imagePath,
     this.fit = BoxFit.contain,
     this.fallbackAsset = 'assets/images/overview.jpg',
     this.alignment = Alignment.center,
+    this.borderRadius = 20.0,
+    this.gaplessPlayback = true, // 🟢 Mặc định true để giữ mịn đệm ảnh cũ
   });
   @override
   Widget build(BuildContext context) {
-    if (imagePath.trim().isEmpty) {
-      return _buildFallbackAsset();
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(borderRadius),
+      child: _buildImageContent(),
+    );
+  }
+  Widget _buildImageContent() {
+    final String trimmedPath = imagePath.trim();
+    if (trimmedPath.isEmpty) {
+      return _buildFallbackAsset('Trống đường dẫn');
     }
-    // if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
-    //   return CachedNetworkImage(
-    //     imageUrl: imagePath,
-    //     fit: fit,
-    //     alignment: alignment,
-    //     placeholder: (context, url) => Stack(
-    //       fit: StackFit.expand,
-    //       children: [
-    //         _buildFallbackAsset(),
-    //         const Center(
-    //           child: CircularProgressIndicator(
-    //             color: Colors.cyanAccent,
-    //             strokeWidth: 2,
-    //           ),
-    //         ),
-    //       ],
-    //     ),
-    //     errorWidget: (context, url, error) => _buildFallbackAsset(),
-    //   );
-    // }
-    // Trong file dynamic_image.dart
-if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
-  return CachedNetworkImage(
-    imageUrl: imagePath,
-    fit: fit,
-    alignment: alignment,
-    
-    // 🟢 SỬA ĐOẠN NÀY: Bỏ CircularProgressIndicator, thay bằng khung màu nền hoặc ảnh fallback
-    placeholder: (context, url) => _buildFallbackAsset(), 
-    
-    // Tạo hiệu ứng hiện ảnh mượt mà 200ms khi nạp xong
-    fadeInDuration: const Duration(milliseconds: 200),
-    
-    errorWidget: (context, url, error) => _buildFallbackAsset(),
-  );
-}
-    if (kIsWeb || imagePath.startsWith('blob:')) {
-      return Image.network(
-        imagePath,
+    Widget content;
+    if (kIsWeb || trimmedPath.startsWith('blob:')) {
+      content = Image.network(
+        trimmedPath,
         fit: fit,
         alignment: alignment,
-        errorBuilder: (context, error, stackTrace) => _buildFallbackAsset(),
+        gaplessPlayback: gaplessPlayback,
+        errorBuilder: (context, error, stackTrace) =>
+            _buildFallbackAsset('Lỗi nạp Web/Blob Image: $error'),
       );
     }
-    if (!kIsWeb && !imagePath.startsWith('assets/')) {
+    else if (!kIsWeb && !trimmedPath.startsWith('assets/')) {
       try {
-        final file = File(imagePath);
+        final file = File(trimmedPath);
         if (file.existsSync()) {
-          return Image.file(
+          content = Image.file(
             file,
             fit: fit,
             alignment: alignment,
-            errorBuilder: (context, error, stackTrace) => _buildFallbackAsset(),
+            gaplessPlayback: gaplessPlayback,
+            errorBuilder: (context, error, stackTrace) =>
+                _buildFallbackAsset('Lỗi nạp File Local: $error'),
           );
+        } else {
+          content = _buildFallbackAsset('File không tồn tại: $trimmedPath');
         }
       } catch (e) {
-        debugPrint('⚠️ DynamicImage File Check Error: $e');
+        content = _buildFallbackAsset('Lỗi kiểm tra File: $e');
       }
     }
-    return Image.asset(
-      imagePath,
-      fit: fit,
-      alignment: alignment,
-      errorBuilder: (context, error, stackTrace) => _buildFallbackAsset(),
+    else {
+      content = Image.asset(
+        trimmedPath,
+        fit: fit,
+        alignment: alignment,
+        gaplessPlayback: gaplessPlayback,
+        errorBuilder: (context, error, stackTrace) =>
+            _buildFallbackAsset('Không tìm thấy Asset Local: $error'),
+      );
+    }
+    if (fit == BoxFit.contain) {
+      return Center(
+        child: FittedBox(
+          fit: BoxFit.contain,
+          alignment: alignment,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(borderRadius),
+            child: content,
+          ),
+        ),
+      );
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(borderRadius),
+      child: content,
     );
   }
-  Widget _buildFallbackAsset() {
+  Widget _buildFallbackAsset(String reason) {
     return Image.asset(
       fallbackAsset,
       fit: fit,
       alignment: alignment,
+      gaplessPlayback: gaplessPlayback,
       errorBuilder: (context, err, stack) => Container(
         color: Colors.grey.shade900,
         child: const Icon(Icons.broken_image, color: Colors.white38, size: 48),

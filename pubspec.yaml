@@ -7,13 +7,14 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_lints: ^6.0.0
   web_socket_channel: ^3.0.3
   shared_preferences: ^2.2.2
   cupertino_icons: ^1.0.8
   http: ^1.2.0 # Thêm dòng này
   image_picker: ^1.1.2 # Chọn ảnh từ thư viện thiết bị
-  file_picker: ^13.1.0  # Chọn file Excel/JSON trực tiếp từ máy (nếu muốn)
-  path_provider: ^2.1.0 # 🟢 Thêm package này
+  file_picker: ^13.3.2  # Chọn file Excel/JSON trực tiếp từ máy (nếu muốn)
+  path_provider: ^2.1.6 # 🟢 Thêm package này
   dio: ^5.4.0           # 🟢 Thêm package này nếu dùng FirmwareService
   logger: ^2.8.0
   url_launcher: ^6.3.3
@@ -23,12 +24,15 @@ dependencies:
   cached_network_image: ^3.3.1
   permission_handler: 11.3.1
   shelf: ^1.4.1              # 🟢 THÊM DÒNG NÀY (HTTP Server nhẹ cho Flutter)
+  mqtt_client: ^10.2.0  # Bổ sung dòng này
+  flutter_cache_manager: ^3.3.1  # 🟢 THÊM DÒNG NÀY
+  path: ^1.9.1
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_launcher_icons: ^0.13.1  # Thêm dòng này
-  flutter_lints: ^6.0.0
+  # flutter_lints: ^6.0.0
 # The following section is specific to Flutter packages.
 flutter_launcher_icons:
   android: true
@@ -41,9 +45,5 @@ flutter_launcher_icons:
 flutter:
   uses-material-design: true
   assets:
-    - assets/images/overview.jpg
-    - assets/images/building.jpg
-    - assets/images/floor.jpg
-    - assets/images/room.jpg
-    - assets/images/background.png
-    - assets/images/icon.png          # 👈 THÊM DÒNG NÀY VÀO
+    # 🟢 Chỉ cần khai báo các thư mục gốc (Flutter tự quét toàn bộ file bên trong)
+    - assets/images/

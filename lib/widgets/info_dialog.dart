@@ -1,22 +1,18 @@
 import 'package:flutter/material.dart';
-
 class InfoDialog extends StatelessWidget {
   final String title;
   final Map<String, String> details;
-
   const InfoDialog({
     super.key,
     required this.title,
     required this.details,
   });
-
   static void show(BuildContext context, {required String title, required Map<String, String> details}) {
     showDialog(
       context: context,
       builder: (context) => InfoDialog(title: title, details: details),
     );
   }
-
   @override
   Widget build(BuildContext context) {
     return Dialog(
@@ -36,7 +32,6 @@ class InfoDialog extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header Dialog
             Row(
               children: [
                 const Icon(Icons.info_outline_rounded, color: Color(0xFF0369A1), size: 24),
@@ -59,8 +54,6 @@ class InfoDialog extends StatelessWidget {
             ),
             const Divider(color: Color(0xFFBAE6FD), height: 20, thickness: 1.2),
             const SizedBox(height: 8),
-
-            // Nội dung chi tiết
             ...details.entries.map((entry) {
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 6.0),
@@ -89,8 +82,6 @@ class InfoDialog extends StatelessWidget {
               );
             }),
             const SizedBox(height: 16),
-
-            // Nút Đóng
             Align(
               alignment: Alignment.centerRight,
               child: ElevatedButton(

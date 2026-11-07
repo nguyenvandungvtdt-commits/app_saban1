@@ -6,10 +6,10 @@ void main() async {
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.landscapeLeft,
     DeviceOrientation.landscapeRight,
-    DeviceOrientation.portraitUp, // Vẫn cho phép dọc nếu chạy trên iPhone nhỏ
+    DeviceOrientation.portraitUp,
   ]);
-  PaintingBinding.instance.imageCache.maximumSize = 20; // Giới hạn tối đa lưu 20 ảnh trong RAM
-  PaintingBinding.instance.imageCache.maximumSizeBytes = 30 * 1024 * 1024; // Giới hạn tối đa 30MB RAM
+  PaintingBinding.instance.imageCache.maximumSize = 500; 
+  PaintingBinding.instance.imageCache.maximumSizeBytes = 300 * 1024 * 1024; // 300 MB
   runApp(const MyApp());
 }
 class MyApp extends StatelessWidget {
@@ -33,7 +33,7 @@ class MyApp extends StatelessWidget {
           child: child,
         );
       },
-      home: const SplashScreen(),
+      home: const SplashScreen(), // Màn hình Splash sẽ tự kiểm tra và điều hướng
     );
   }
 }
